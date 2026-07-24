@@ -45,3 +45,5 @@ docker run --rm -p 3001:3001 gincana-web
 ```
 
 O `next.config.ts` usa `output: "standalone"` e o Dockerfile copia apenas o servidor e os assets necessários para a imagem final.
+
+O script `build:sites` produz, adicionalmente, o pacote Cloudflare Workers usado pela publicação no Sites. O Docker executa `build:next`, preservando o runtime standalone solicitado.
