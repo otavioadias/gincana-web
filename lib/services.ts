@@ -11,6 +11,7 @@ import type {
   Membership,
   Organization,
   Principal,
+  RankingEntry,
   Submission,
   TokenPair,
   TeamProfile,
@@ -131,6 +132,11 @@ export const dashboardService = {
     apiRequest<DashboardSummary>(`/dashboard/summary${query({ campaignId })}`),
   byActivity: (campaignId?: string) =>
     apiRequest<ActivitySummary[]>(`/dashboard/by-activity${query({ campaignId })}`),
+};
+
+export const rankingService = {
+  list: (campaignId?: string) =>
+    apiRequest<RankingEntry[]>(`/ranking${query({ campaignId })}`),
 };
 
 export const campaignService = {

@@ -9,6 +9,7 @@ const accessRules: Array<{ prefix: string; roles: AppRole[] }> = [
   { prefix: "/goals", roles: ["MANAGER", "MEMBER", "SUPER_ADMIN"] },
   { prefix: "/settings", roles: ["MANAGER", "MEMBER"] },
   { prefix: "/dashboard", roles: ["MANAGER", "MEMBER"] },
+  { prefix: "/ranking", roles: ["SUPER_ADMIN", "MANAGER", "MEMBER"] },
   { prefix: "/activities", roles: ["MANAGER", "MEMBER", "SUPER_ADMIN"] },
   { prefix: "/submissions", roles: ["MANAGER", "MEMBER"] },
 ];

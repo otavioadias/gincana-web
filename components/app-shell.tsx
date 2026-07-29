@@ -15,6 +15,7 @@ import {
   Send,
   Settings,
   Target,
+  Trophy,
   Users,
   X,
 } from "lucide-react";
@@ -43,6 +44,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/create-team", label: "Criar equipe", icon: Building2, roles: ["LEADER_SETUP"] },
   { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard, roles: ["MANAGER", "MEMBER"] },
+  { href: "/ranking", label: "Ranking", icon: Trophy, roles: ["SUPER_ADMIN", "MANAGER", "MEMBER"] },
   { href: "/activities", label: "Atividades", icon: Activity, roles: ["MANAGER", "MEMBER", "SUPER_ADMIN"] },
   { href: "/submissions", label: "Ações da equipe", icon: Send, roles: ["MEMBER", "MANAGER"] },
   { href: "/validations", label: "Validações", icon: ClipboardCheck, roles: ["SUPER_ADMIN"] },

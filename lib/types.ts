@@ -91,6 +91,16 @@ export interface AdminTeamSummary {
   goals: Array<Goal & { progress?: GoalProgress }>;
 }
 
+export interface RankingEntry {
+  position: number;
+  organizationId: string;
+  name: string;
+  slug: string;
+  photoUrl: string | null;
+  points: number;
+  lastUpdatedAt: string | null;
+}
+
 export interface ActivityItemType {
   id?: string;
   name?: string;

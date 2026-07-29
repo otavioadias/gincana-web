@@ -11,6 +11,7 @@ import {
   goalService,
   memberService,
   organizationService,
+  rankingService,
   submissionService,
   teamSettingsService,
   validationService,
@@ -119,6 +120,9 @@ describe("fluxos essenciais", () => {
     expect(canAccessPath("SUPER_ADMIN", "/admin/organizations")).toBe(true);
     expect(canAccessPath("SUPER_ADMIN", "/dashboard")).toBe(false);
     expect(canAccessPath("MEMBER", "/settings")).toBe(true);
+    expect(canAccessPath("MEMBER", "/ranking")).toBe(true);
+    expect(canAccessPath("MANAGER", "/ranking")).toBe(true);
+    expect(canAccessPath("SUPER_ADMIN", "/ranking")).toBe(true);
   });
 
   it("mapeia o papel ADMIN do backend para a área administrativa", () => {
@@ -395,6 +399,32 @@ describe("fluxos essenciais", () => {
   it("consome desclassificação retornada no resumo", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ disqualified: true }), { status: 200, headers: { "Content-Type": "application/json" } })));
     expect((await dashboardService.summary()).disqualified).toBe(true);
+  });
+
+  it("carrega o ranking global com filtro opcional de campanha", async () => {
+    tokenStorage.write({ accessToken: "token", refreshToken: "refresh-token-with-more-than-32-chars", expiresIn: "15m" });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      {
+        position: 1,
+        organizationId: "team-1",
+        name: "Equipe Azul",
+        slug: "equipe-azul",
+        photoUrl: null,
+        points: 4685,
+        lastUpdatedAt: "2026-07-29T12:00:00.000Z",
+      },
+    ]), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ranking = await rankingService.list("campaign-1");
+
+    expect(ranking[0]).toEqual(expect.objectContaining({ position: 1, points: 4685 }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:3000/ranking?campaignId=campaign-1",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get("Authorization")).toBe("Bearer token");
   });
 
   it("gera variáveis globais de marca com variações derivadas", () => {
