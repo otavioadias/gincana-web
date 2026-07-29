@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api-client";
 import type {
   Activity,
   ActivitySummary,
+  AdminTeamSummary,
   Campaign,
   DashboardSummary,
   Evidence,
@@ -104,7 +105,7 @@ export const authService = {
     });
   },
   registerLeader(input: { name: string; email: string; password: string }) {
-    return apiRequest<TokenPair>("/auth/register-leader", {
+    return apiRequest<TokenPair>("/auth/register-manager", {
       method: "POST",
       body: { ...input, deviceInfo: navigator.userAgent },
       authenticated: false,
@@ -134,9 +135,11 @@ export const dashboardService = {
 
 export const campaignService = {
   list: () => apiRequest<Campaign[]>("/campaigns"),
+  get: (id: string) => apiRequest<Campaign>(`/campaigns/${id}`),
   create: (body: unknown) => apiRequest<Campaign>("/campaigns", { method: "POST", body }),
   update: (id: string, body: unknown) =>
     apiRequest<Campaign>(`/campaigns/${id}`, { method: "PATCH", body }),
+  remove: (id: string) => apiRequest<void>(`/campaigns/${id}`, { method: "DELETE" }),
 };
 
 export const activityService = {
@@ -148,10 +151,11 @@ export const activityService = {
   create: async (body: unknown) => normalizeActivity(await apiRequest<unknown>("/activities", { method: "POST", body })),
   update: async (id: string, body: unknown) =>
     normalizeActivity(await apiRequest<unknown>(`/activities/${id}`, { method: "PATCH", body })),
-  availability: (id: string, actionDate: string) =>
+  availability: (id: string, actionDate: string, organizationId?: string) =>
     apiRequest<Activity["availability"]>(
-      `/activities/${id}/availability${query({ actionDate })}`,
+      `/activities/${id}/availability${query({ actionDate, organizationId })}`,
     ),
+  remove: (id: string) => apiRequest<void>(`/activities/${id}`, { method: "DELETE" }),
 };
 
 export const submissionService = {
@@ -178,17 +182,19 @@ export const submissionService = {
 };
 
 export const validationService = {
-  list: (status?: string) =>
-    apiRequest<Submission[]>(`/validation/submissions${query({ status })}`),
-  get: (id: string) => apiRequest<Submission>(`/validation/submissions/${id}`),
+  list: (status?: string, organizationId?: string, campaignId?: string) =>
+    apiRequest<Submission[]>(`/admin/submissions${query({ status, organizationId, campaignId })}`),
+  get: (id: string) => apiRequest<Submission>(`/admin/submissions/${id}`),
   validate: (id: string, body: unknown) =>
-    apiRequest<Submission>(`/validation/submissions/${id}/validate`, {
+    apiRequest<Submission>(`/admin/submissions/${id}/validate`, {
       method: "POST",
       body,
     }),
+  approve: (id: string) =>
+    apiRequest<Submission>(`/admin/submissions/${id}/approve`, { method: "POST" }),
   evidenceUrl: (submissionId: string, evidenceId: string) =>
     apiRequest<{ url: string }>(
-      `/validation/submissions/${submissionId}/evidences/${evidenceId}/url`,
+      `/admin/submissions/${submissionId}/evidences/${evidenceId}/url`,
     ),
 };
 
@@ -209,7 +215,8 @@ export const goalService = {
   update: (id: string, body: unknown) =>
     apiRequest<Goal>(`/goals/${id}`, { method: "PATCH", body }).then(normalizeGoal),
   remove: (id: string) => apiRequest<void>(`/goals/${id}`, { method: "DELETE" }),
-  progress: (id: string) => apiRequest<GoalProgress>(`/goals/${id}/progress`),
+  progress: (id: string, organizationId?: string) =>
+    apiRequest<GoalProgress>(`/goals/${id}/progress${query({ organizationId })}`),
   monthlyPlan: (body: MonthlyPlanInput) =>
     apiRequest<Goal[]>("/goals/monthly-plan", { method: "POST", body }).then((goals) => goals.map(normalizeGoal)),
 };
@@ -229,10 +236,22 @@ export const teamSettingsService = {
 
 export const organizationService = {
   list: () => apiRequest<Organization[]>("/admin/organizations"),
+  get: (id: string) => apiRequest<Organization>(`/admin/organizations/${id}`),
   create: (body: unknown) =>
     apiRequest<Organization>("/admin/organizations", { method: "POST", body }),
   update: (id: string, body: unknown) =>
     apiRequest<Organization>(`/admin/organizations/${id}`, { method: "PATCH", body }),
+  remove: (id: string) =>
+    apiRequest<void>(`/admin/organizations/${id}`, { method: "DELETE" }),
+};
+
+export const adminDashboardService = {
+  list: (campaignId?: string) =>
+    apiRequest<AdminTeamSummary[]>(`/admin/dashboard/teams${query({ campaignId })}`),
+  get: (organizationId: string, campaignId?: string) =>
+    apiRequest<AdminTeamSummary>(
+      `/admin/dashboard/teams/${organizationId}${query({ campaignId })}`,
+    ),
 };
 
 export const systemService = {

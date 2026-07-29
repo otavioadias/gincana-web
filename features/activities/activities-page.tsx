@@ -2,10 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Filter, Pencil, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, Filter, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Button, Card, Field, Input, PageHeading, Select } from "@/components/ui";
@@ -16,6 +16,7 @@ import {
   ActivityLimitSummary,
 } from "@/components/activity-limits";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { ConfirmDialog } from "@/components/feedback";
 import { useSession } from "@/features/auth/session-provider";
 import { activityAvailability } from "@/features/activities/availability";
 import { activityService, campaignService } from "@/lib/services";
@@ -59,6 +60,17 @@ const createSchema = z.object({
     z.coerce.number().min(0).max(100).optional(),
   ),
   evidenceRequired: z.boolean(),
+  repeatable: z.boolean(),
+  status: z.enum(["ACTIVE", "INACTIVE"]),
+  itemTypes: z.array(z.object({
+    name: z.string().min(1, "Informe o item"),
+    pointsPerUnit: z.coerce.number().min(0),
+    unit: z.string().min(1, "Informe a unidade"),
+    minimumQuantity: z.preprocess(
+      (value) => value === "" ? undefined : value,
+      z.coerce.number().min(0).optional(),
+    ),
+  })),
 });
 type CreateValues = z.infer<typeof createSchema>;
 type CreateInput = z.input<typeof createSchema>;
@@ -68,10 +80,13 @@ export function ActivitiesPage() {
   const queryClient = useQueryClient();
   const tenant = principal?.organizationId ?? null;
   const role = appRole(principal);
+  const canManage = role === "SUPER_ADMIN";
   const [campaign, setCampaign] = useState("");
   const [scoring, setScoring] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [limitActivity, setLimitActivity] = useState<Activity | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Activity | null>(null);
   const today = new Date().toISOString().slice(0, 10);
   const activities = useQuery({
     queryKey: queryKeys.tenant(tenant, "activities", { campaign, actionDate: today }),
@@ -80,17 +95,35 @@ export function ActivitiesPage() {
   const campaigns = useQuery({ queryKey: queryKeys.tenant(tenant, "campaigns"), queryFn: campaignService.list });
   const form = useForm<CreateInput, unknown, CreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { scoringType: "FIXED", points: 0, evidenceRequired: true },
+    defaultValues: {
+      scoringType: "FIXED",
+      points: 0,
+      evidenceRequired: true,
+      repeatable: true,
+      status: "ACTIVE",
+      itemTypes: [],
+    },
   });
-  const createActivity = useMutation({
-    mutationFn: activityService.create,
+  const itemTypes = useFieldArray({ control: form.control, name: "itemTypes" });
+  const saveActivity = useMutation({
+    mutationFn: (values: CreateValues) => editingActivity
+      ? activityService.update(editingActivity.id, values)
+      : activityService.create(values),
     onSuccess: async () => {
-      toast.success("Atividade criada");
-      form.reset({ scoringType: "FIXED", points: 0, evidenceRequired: true });
+      toast.success(editingActivity ? "Atividade atualizada" : "Atividade criada");
+      form.reset({
+        scoringType: "FIXED",
+        points: 0,
+        evidenceRequired: true,
+        repeatable: true,
+        status: "ACTIVE",
+        itemTypes: [],
+      });
+      setEditingActivity(null);
       setShowForm(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.tenantResource(tenant, "activities") });
     },
-    onError: (error) => toast.error(translateApiError(error, "Não foi possível criar a atividade")),
+    onError: (error) => toast.error(translateApiError(error, "Não foi possível salvar a atividade")),
   });
   const updateLimits = useMutation({
     mutationFn: ({ id, values }: { id: string; values: Partial<Activity> }) =>
@@ -102,6 +135,56 @@ export function ActivitiesPage() {
     },
     onError: (error) => toast.error(translateApiError(error, "Não foi possível atualizar os limites")),
   });
+  const removeActivity = useMutation({
+    mutationFn: activityService.remove,
+    onSuccess: async () => {
+      toast.success("Atividade desativada");
+      setPendingDelete(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tenantResource(tenant, "activities") });
+    },
+    onError: (error) => toast.error(translateApiError(error, "Não foi possível desativar a atividade")),
+  });
+
+  const openCreate = () => {
+    setEditingActivity(null);
+    form.reset({
+      scoringType: "FIXED",
+      points: 0,
+      evidenceRequired: true,
+      repeatable: true,
+      status: "ACTIVE",
+      itemTypes: [],
+    });
+    setShowForm((value) => !value);
+  };
+  const openEdit = (activity: Activity) => {
+    setEditingActivity(activity);
+    form.reset({
+      campaignId: activity.campaignId ?? "",
+      name: activity.name ?? "",
+      description: activity.description ?? "",
+      scoringType: activity.scoringType ?? "FIXED",
+      points: activity.points ?? 0,
+      unit: activity.unit ?? "",
+      maxOccurrences: activity.maxOccurrences ?? undefined,
+      maxOccurrencesPerMonth: activity.maxOccurrencesPerMonth ?? undefined,
+      maxOccurrencesPerParticipant: activity.maxOccurrencesPerParticipant ?? undefined,
+      maxOccurrencesPerParticipantPerMonth: activity.maxOccurrencesPerParticipantPerMonth ?? undefined,
+      minimumParticipants: activity.minimumParticipants ?? undefined,
+      minimumQuantity: activity.minimumQuantity ?? undefined,
+      minimumParticipationPercent: activity.minimumParticipationPercent ?? undefined,
+      evidenceRequired: activity.evidenceRequired ?? true,
+      repeatable: activity.repeatable ?? true,
+      status: activity.status ?? "ACTIVE",
+      itemTypes: (activity.itemTypes ?? []).map((item) => ({
+        name: item.name ?? "",
+        pointsPerUnit: item.pointsPerUnit ?? item.points ?? 0,
+        unit: item.unit ?? "",
+        minimumQuantity: item.minimumQuantity,
+      })),
+    });
+    setShowForm(true);
+  };
 
   const filtered = useMemo(
     () =>
@@ -118,15 +201,17 @@ export function ActivitiesPage() {
   return (
     <>
       <PageHeading
-        eyebrow="Possibilidades de impacto"
+        eyebrow={canManage ? "Administração global" : "Possibilidades de impacto"}
         title="Atividades"
-        description="Veja as regras, a disponibilidade e escolha como contribuir."
-        action={role === "MANAGER" ? <Button onClick={() => setShowForm((value) => !value)}><Plus size={17} /> Nova atividade</Button> : undefined}
+        description={canManage
+          ? "Crie, edite, limite e desative as atividades disponíveis para todas as equipes."
+          : "Veja as regras, a disponibilidade e escolha como contribuir."}
+        action={canManage ? <Button onClick={openCreate}><Plus size={17} /> Nova atividade</Button> : undefined}
       />
-      {showForm ? (
+      {showForm && canManage ? (
         <Card className="inline-form-card">
-          <div className="card-heading"><div><p className="eyebrow">Configuração</p><h3>Nova atividade</h3></div></div>
-          <form className="form-grid" onSubmit={form.handleSubmit((values) => createActivity.mutate({ ...values, description: values.description || undefined, unit: values.unit || undefined }))}>
+          <div className="card-heading"><div><p className="eyebrow">Configuração global</p><h3>{editingActivity ? "Editar atividade" : "Nova atividade"}</h3></div></div>
+          <form className="form-grid" onSubmit={form.handleSubmit((values) => saveActivity.mutate({ ...values, description: values.description || undefined, unit: values.unit || undefined }))}>
             <Field label="Campanha" error={form.formState.errors.campaignId?.message}>
               <select className="input" {...form.register("campaignId")}><option value="">Selecione</option>{(campaigns.data ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
             </Field>
@@ -145,8 +230,60 @@ export function ActivitiesPage() {
               <input type="checkbox" {...form.register("evidenceRequired")} />
               Exigir evidência no envio
             </label>
+            <label className="remember-option">
+              <input type="checkbox" {...form.register("repeatable")} />
+              Permitir repetição
+            </label>
+            <Field label="Status">
+              <select className="input" {...form.register("status")}>
+                <option value="ACTIVE">Ativa</option>
+                <option value="INACTIVE">Inativa</option>
+              </select>
+            </Field>
+            <div className="activity-items-editor">
+              <div>
+                <strong>Itens e faixas de pontuação</strong>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => itemTypes.append({
+                    name: "",
+                    pointsPerUnit: 0,
+                    unit: "unidade",
+                    minimumQuantity: undefined,
+                  })}
+                >
+                  <Plus size={15} /> Adicionar item
+                </Button>
+              </div>
+              {itemTypes.fields.map((field, index) => (
+                <Card key={field.id} className="activity-item-editor-row">
+                  <Field label="Nome" error={form.formState.errors.itemTypes?.[index]?.name?.message}>
+                    <Input {...form.register(`itemTypes.${index}.name`)} />
+                  </Field>
+                  <Field label="Pontos por unidade">
+                    <Input type="number" min="0" step="0.1" {...form.register(`itemTypes.${index}.pointsPerUnit`)} />
+                  </Field>
+                  <Field label="Unidade" error={form.formState.errors.itemTypes?.[index]?.unit?.message}>
+                    <Input {...form.register(`itemTypes.${index}.unit`)} />
+                  </Field>
+                  <Field label="Quantidade mínima">
+                    <Input type="number" min="0" step="0.1" {...form.register(`itemTypes.${index}.minimumQuantity`)} />
+                  </Field>
+                  <Button type="button" variant="ghost" onClick={() => itemTypes.remove(index)}>
+                    <Trash2 size={15} /> Remover
+                  </Button>
+                </Card>
+              ))}
+            </div>
             <Field label="Descrição"><textarea className="input" {...form.register("description")} /></Field>
-            <div className="form-actions"><Button variant="secondary" type="button" onClick={() => setShowForm(false)}>Cancelar</Button><Button loading={createActivity.isPending}>Criar atividade</Button></div>
+            <div className="form-actions">
+              <Button variant="secondary" type="button" onClick={() => {
+                setShowForm(false);
+                setEditingActivity(null);
+              }}>Cancelar</Button>
+              <Button loading={saveActivity.isPending}>{editingActivity ? "Salvar atividade" : "Criar atividade"}</Button>
+            </div>
           </form>
         </Card>
       ) : null}
@@ -170,7 +307,11 @@ export function ActivitiesPage() {
               <Card key={activity.id} className="activity-card">
                 <div className="activity-card-top">
                   <span className="activity-symbol"><Sparkles size={19} /></span>
-                  <ActivityAvailabilityBadge available={availability.available} reason={availability.reason} />
+                  {canManage ? (
+                    <span className={`availability ${activity.status === "ACTIVE" ? "available" : "unavailable"}`}>
+                      {activity.status === "ACTIVE" ? "Ativa" : "Inativa"}
+                    </span>
+                  ) : <ActivityAvailabilityBadge available={availability.available} reason={availability.reason} />}
                 </div>
                 <div className="activity-content">
                   <p className="eyebrow">{activity.scoringType ? scoringLabels[activity.scoringType] : "Atividade"}</p>
@@ -184,10 +325,18 @@ export function ActivitiesPage() {
                 {max ? <div className="progress-track"><span style={{ width: `${Math.min(100, (availability.used / max) * 100)}%` }} /></div> : null}
                 <ActivityLimitSummary activity={activity} availability={activity.availability} />
                 {activity.availability ? <ActivityAvailabilityDetails availability={activity.availability} /> : null}
-                {role === "MANAGER" ? (
-                  <Button type="button" variant="secondary" onClick={() => setLimitActivity(activity)}>
-                    <Pencil size={15} /> Configurar limites
-                  </Button>
+                {canManage ? (
+                  <div className="management-actions">
+                    <Button type="button" variant="secondary" onClick={() => openEdit(activity)}>
+                      <Pencil size={15} /> Editar
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setLimitActivity(activity)}>
+                      Configurar limites
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => setPendingDelete(activity)}>
+                      <Trash2 size={15} /> Desativar
+                    </Button>
+                  </div>
                 ) : null}
                 {role === "MEMBER" || role === "MANAGER" ? (
                   availability.available ? <Link className="button button-primary activity-action" href={`/submissions/new?activityId=${activity.id}`}>Registrar esta ação <ArrowRight size={16} /></Link> : <button className="button button-secondary activity-action" disabled title={availability.reason ?? undefined}>Registro indisponível</button>
@@ -224,6 +373,16 @@ export function ActivitiesPage() {
           </Card>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Desativar esta atividade?"
+        description="O histórico será preservado e novos registros ficarão indisponíveis."
+        confirmLabel="Desativar atividade"
+        destructive
+        loading={removeActivity.isPending}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && removeActivity.mutate(pendingDelete.id)}
+      />
     </>
   );
 }

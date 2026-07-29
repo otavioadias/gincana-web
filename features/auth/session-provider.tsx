@@ -25,8 +25,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 
 function landingPath(principal: Principal) {
   const role = appRole(principal);
-  if (role === "SUPER_ADMIN") return "/admin/organizations";
-  if (role === "VALIDATOR") return "/validations";
+  if (role === "SUPER_ADMIN") return "/admin/dashboard";
   if (role === "LEADER_SETUP") return "/create-team";
   return "/dashboard";
 }

@@ -5,10 +5,12 @@ import { ApiError, isPermissionError } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
 import {
   activityService,
+  adminDashboardService,
   authService,
   dashboardService,
   goalService,
   memberService,
+  organizationService,
   submissionService,
   teamSettingsService,
   validationService,
@@ -67,7 +69,7 @@ describe("fluxos essenciais", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:3000/auth/register-leader",
+      "http://localhost:3000/auth/register-manager",
       expect.objectContaining({
         method: "POST",
         body: expect.stringContaining('"name":"Ana"'),
@@ -111,7 +113,7 @@ describe("fluxos essenciais", () => {
 
   it("protege rotas conforme o perfil", () => {
     expect(canAccessPath("MEMBER", "/validations")).toBe(false);
-    expect(canAccessPath("VALIDATOR", "/validations")).toBe(true);
+    expect(canAccessPath("SUPER_ADMIN", "/validations")).toBe(true);
     expect(canAccessPath("MANAGER", "/validations")).toBe(false);
     expect(canAccessPath("LEADER_SETUP", "/create-team")).toBe(true);
     expect(canAccessPath("SUPER_ADMIN", "/admin/organizations")).toBe(true);
@@ -237,7 +239,7 @@ describe("fluxos essenciais", () => {
     );
   });
 
-  it("carrega a fila global sem exigir organização no perfil validador", async () => {
+  it("carrega a fila global pelos endpoints administrativos oficiais", async () => {
     tokenStorage.write({ accessToken: "token", refreshToken: "refresh-token-with-more-than-32-chars", expiresIn: "15m" });
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -253,13 +255,30 @@ describe("fluxos essenciais", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const queue = await validationService.list("SUBMITTED");
+    const queue = await validationService.list("SUBMITTED", "team-1", "campaign-1");
 
     expect(queue[0]?.organization?.name).toBe("Equipe Esperança");
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:3000/validation/submissions?status=SUBMITTED",
+      "http://localhost:3000/admin/submissions?status=SUBMITTED&organizationId=team-1&campaignId=campaign-1",
       expect.objectContaining({ headers: expect.any(Headers) }),
     );
+  });
+
+  it("integra painel, detalhe e desativação administrativa", async () => {
+    tokenStorage.write({ accessToken: "token", refreshToken: "refresh-token-with-more-than-32-chars", expiresIn: "15m" });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ team: { id: "team-1", name: "Equipe", slug: "equipe" }, disqualified: false }]), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "team-1", name: "Equipe" }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await adminDashboardService.list("campaign-1");
+    await organizationService.get("team-1");
+    await organizationService.remove("team-1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "http://localhost:3000/admin/dashboard/teams?campaignId=campaign-1", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "http://localhost:3000/admin/organizations/team-1", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "http://localhost:3000/admin/organizations/team-1", expect.objectContaining({ method: "DELETE" }));
   });
 
   it("cria rascunho usando exatamente o endpoint de submissões", async () => {

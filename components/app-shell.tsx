@@ -43,13 +43,14 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/create-team", label: "Criar equipe", icon: Building2, roles: ["LEADER_SETUP"] },
   { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard, roles: ["MANAGER", "MEMBER"] },
-  { href: "/activities", label: "Atividades", icon: Activity, roles: ["MANAGER", "MEMBER"] },
+  { href: "/activities", label: "Atividades", icon: Activity, roles: ["MANAGER", "MEMBER", "SUPER_ADMIN"] },
   { href: "/submissions", label: "Ações da equipe", icon: Send, roles: ["MEMBER", "MANAGER"] },
-  { href: "/validations", label: "Validações", icon: ClipboardCheck, roles: ["VALIDATOR"] },
+  { href: "/validations", label: "Validações", icon: ClipboardCheck, roles: ["SUPER_ADMIN"] },
   { href: "/members", label: "Equipe", icon: Users, roles: ["MANAGER"] },
-  { href: "/campaigns", label: "Campanhas", icon: Flag, roles: ["MANAGER"] },
-  { href: "/goals", label: "Metas", icon: Target, roles: ["MANAGER"] },
+  { href: "/campaigns", label: "Campanhas", icon: Flag, roles: ["MANAGER", "SUPER_ADMIN"] },
+  { href: "/goals", label: "Metas", icon: Target, roles: ["MANAGER", "SUPER_ADMIN"] },
   { href: "/settings", label: "Identidade", icon: Settings, roles: ["MANAGER", "MEMBER"] },
+  { href: "/admin/dashboard", label: "Painel das equipes", icon: LayoutDashboard, roles: ["SUPER_ADMIN"] },
   { href: "/admin/organizations", label: "Equipes", icon: Building2, roles: ["SUPER_ADMIN"] },
   { href: "/admin/metrics", label: "Saúde da plataforma", icon: BarChart3, roles: ["SUPER_ADMIN"] },
 ];
@@ -58,7 +59,6 @@ function roleLabel(role: AppRole | null) {
   return (
     {
       SUPER_ADMIN: "Super admin",
-      VALIDATOR: "Validador da plataforma",
       LEADER_SETUP: "Líder sem equipe",
       MANAGER: "Líder da equipe",
       MEMBER: "Participante",
@@ -148,7 +148,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="topbar-context">
             <span className="pulse-dot" />
-            <span>{role === "SUPER_ADMIN" || role === "VALIDATOR" ? "Plataforma" : role === "LEADER_SETUP" ? "Primeiro acesso" : brand.name ?? "Equipe conectada"}</span>
+            <span>{role === "SUPER_ADMIN" ? "Plataforma" : role === "LEADER_SETUP" ? "Primeiro acesso" : brand.name ?? "Equipe conectada"}</span>
           </div>
           <div className="profile-menu">
             <span className="avatar">{initials(displayName)}</span>

@@ -1,7 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarClock, Target, Trash2 } from "lucide-react";
+import { CalendarClock, Pencil, Target, Trash2 } from "lucide-react";
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { GoalProgress } from "@/components/goal-progress";
@@ -41,11 +42,13 @@ export function GoalCard({
   goal,
   progress,
   loading,
+  onEdit,
   onDelete,
 }: {
   goal: Goal;
   progress?: GoalProgressData;
   loading?: boolean;
+  onEdit?: () => void;
   onDelete?: () => void;
 }) {
   return (
@@ -74,7 +77,12 @@ export function GoalCard({
             {progress.targets.quantity > 0 ? <GoalProgressBar label={`Quantidade${goal.unit ? ` (${goal.unit})` : ""}`} current={progress.achieved.quantity} target={progress.targets.quantity} kind={goal.unit ?? "unidades"} /> : null}
           </>
         ) : null}
-        {onDelete ? <Button type="button" variant="ghost" className="goal-delete" onClick={onDelete}><Trash2 size={15} /> Excluir meta</Button> : null}
+        {onEdit || onDelete ? (
+          <div className="management-actions">
+            {onEdit ? <Button type="button" variant="secondary" onClick={onEdit}><Pencil size={15} /> Editar</Button> : null}
+            {onDelete ? <Button type="button" variant="ghost" className="goal-delete" onClick={onDelete}><Trash2 size={15} /> Excluir meta</Button> : null}
+          </div>
+        ) : null}
       </div>
     </Card>
   );
@@ -111,12 +119,14 @@ type GoalFormInput = z.input<typeof goalFormSchema>;
 export function GoalForm({
   campaigns,
   activities,
+  initialValues,
   loading,
   onCancel,
   onSubmit,
 }: {
   campaigns: Campaign[];
   activities: Activity[];
+  initialValues?: Goal | null;
   loading?: boolean;
   onCancel: () => void;
   onSubmit: (values: GoalFormValues) => void;
@@ -128,6 +138,22 @@ export function GoalForm({
       targetPoints: 0, targetActions: 0, targetParticipants: 0, targetQuantity: 0, unit: "",
     },
   });
+  useEffect(() => {
+    form.reset({
+      title: initialValues?.title ?? "",
+      description: initialValues?.description ?? "",
+      campaignId: initialValues?.campaignId ?? "",
+      activityId: initialValues?.activityId ?? "",
+      type: initialValues?.type ?? "WEEKLY",
+      startsAt: initialValues?.startsAt?.slice(0, 10) ?? "",
+      endsAt: initialValues?.endsAt?.slice(0, 10) ?? "",
+      targetPoints: initialValues?.targetPoints ?? 0,
+      targetActions: initialValues?.targetActions ?? 0,
+      targetParticipants: initialValues?.targetParticipants ?? 0,
+      targetQuantity: initialValues?.targetQuantity ?? 0,
+      unit: initialValues?.unit ?? "",
+    });
+  }, [form, initialValues]);
   const campaignId = useWatch({ control: form.control, name: "campaignId" });
   const campaign = campaigns.find((item) => item.id === campaignId);
   const availableActivities = activities.filter((item) => item.campaignId === campaignId);
@@ -147,7 +173,7 @@ export function GoalForm({
       <Field label="Meta de quantidade"><Input type="number" min="0" step="0.1" {...form.register("targetQuantity")} /></Field>
       <Field label="Unidade"><Input placeholder="kg, itens, kits…" {...form.register("unit")} /></Field>
       <Field label="Descrição"><textarea className="input" {...form.register("description")} /></Field>
-      <div className="form-actions"><Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button><Button loading={loading}>Criar meta</Button></div>
+      <div className="form-actions"><Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button><Button loading={loading}>{initialValues ? "Salvar meta" : "Criar meta"}</Button></div>
     </form>
   );
 }

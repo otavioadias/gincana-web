@@ -1,6 +1,6 @@
 export type PlatformRole = "ADMIN" | "USER";
 export type MembershipRole = "MANAGER" | "MEMBER";
-export type AppRole = "SUPER_ADMIN" | "VALIDATOR" | "LEADER_SETUP" | MembershipRole;
+export type AppRole = "SUPER_ADMIN" | "LEADER_SETUP" | MembershipRole;
 export type EntityStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED";
 export type CampaignStatus = "DRAFT" | "ACTIVE" | "CLOSED" | "ARCHIVED";
 export type ActivityStatus = "ACTIVE" | "INACTIVE";
@@ -71,6 +71,26 @@ export interface Campaign extends BaseEntity {
   minimumActionsPerMonth?: number;
 }
 
+export interface AdminTeamReference {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface AdminTeamSummary {
+  team: AdminTeamReference;
+  approvedPoints: number;
+  pendingPoints: number;
+  totalPoints: number;
+  approvedActions: number;
+  pendingActions: number;
+  totalActions: number;
+  activeParticipants: number;
+  disqualified: boolean;
+  regularity: DashboardSummary["regularity"];
+  goals: Array<Goal & { progress?: GoalProgress }>;
+}
+
 export interface ActivityItemType {
   id?: string;
   name?: string;
@@ -136,6 +156,7 @@ export interface Submission extends BaseEntity {
   approvedPoints?: number;
   validationReason?: string;
   activity?: Activity;
+  campaign?: Campaign;
   organization?: Organization;
   evidences?: Evidence[];
   submittedAt?: string;
