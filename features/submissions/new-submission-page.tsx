@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Calculator, Info, Save, Send } from "lucide-react";
+import { ArrowLeft, Calculator, Save, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,9 +11,10 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { FileUploader } from "@/components/file-uploader";
 import { ParticipantSelector } from "@/components/participant-selector";
+import { ActivityAvailabilityDetails } from "@/components/activity-limits";
+import { ApiErrorAlert } from "@/components/feedback";
 import { Button, Card, Field, Input, PageHeading } from "@/components/ui";
 import { ErrorState, LoadingState, PermissionState } from "@/components/states";
-import { activityAvailability } from "@/features/activities/availability";
 import { useSession } from "@/features/auth/session-provider";
 import { estimatePoints } from "@/features/submissions/estimate";
 import {
@@ -39,6 +40,10 @@ const schema = z.object({
   quantity: z.coerce.number().min(0).optional(),
   unit: z.string().max(40).optional(),
   notes: z.string().optional(),
+  durationMinutes: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.coerce.number().min(0).optional(),
+  ),
   participantIds: z.array(z.string()),
   items: z.array(itemSchema),
 });
@@ -63,7 +68,7 @@ export function NewSubmissionPage() {
   const campaigns = useQuery({ queryKey: queryKeys.tenant(tenant, "campaigns"), queryFn: campaignService.list });
   const participants = useQuery({
     queryKey: queryKeys.tenant(tenant, "submission-participants"),
-    queryFn: memberService.participants,
+    queryFn: () => memberService.participants(),
   });
   const form = useForm<InputValues, unknown, Values>({
     resolver: zodResolver(schema),
@@ -82,8 +87,13 @@ export function NewSubmissionPage() {
   const actionDate = useWatch({ control: form.control, name: "actionDate" });
   const itemValues = useWatch({ control: form.control, name: "items" });
   const activity = useMemo(() => activities.data?.find((item) => item.id === activityId), [activities.data, activityId]);
-  const availability = activity ? activityAvailability(activity) : null;
   const campaign = campaigns.data?.find((item) => item.id === activity?.campaignId);
+  const availabilityQuery = useQuery({
+    queryKey: queryKeys.tenant(tenant, "activity-availability", { activityId, actionDate }),
+    queryFn: () => activityService.availability(activityId, actionDate),
+    enabled: Boolean(activityId && actionDate),
+  });
+  const availability = availabilityQuery.data;
 
   useEffect(() => {
     if (!activity) return;
@@ -108,8 +118,18 @@ export function NewSubmissionPage() {
     }
   }, [form, participantIds.length, participants.data, principal?.membershipId]);
 
+  const itemQuantities = itemValues.map((item) => Number(item.quantity ?? 0));
+  const completeKits = itemQuantities.length
+    ? Math.floor(Math.min(...itemQuantities))
+    : 0;
+  const reportedQuantity =
+    activity?.scoringType === "PER_COMPLETE_KIT" && itemQuantities.length
+      ? completeKits
+      : activity?.scoringType === "PER_ITEM"
+        ? itemQuantities.reduce((total, value) => total + value, 0)
+        : typeof quantity === "number" ? quantity : Number(quantity ?? 0);
   const estimate = estimatePoints(activity, {
-    quantity: typeof quantity === "number" ? quantity : Number(quantity ?? 0),
+    quantity: reportedQuantity,
     participantCount: participantIds.length,
     items: itemValues.map((item) => ({
       quantity:
@@ -122,9 +142,10 @@ export function NewSubmissionPage() {
     campaign,
     actionDate,
     quantity: typeof quantity === "number" ? quantity : Number(quantity ?? 0),
-    itemQuantities: itemValues.map((item) => Number(item.quantity ?? 0)),
+    itemQuantities,
     participantCount: participantIds.length,
     activeParticipantCount: participants.data?.length ?? 0,
+    availability,
   });
   const minimumParticipants = minimumParticipantCount(
     activity,
@@ -136,10 +157,18 @@ export function NewSubmissionPage() {
       const body = {
         campaignId: values.campaignId,
         activityId: values.activityId,
-        actionDate: new Date(`${values.actionDate}T12:00:00`).toISOString(),
+        actionDate: values.actionDate,
         institutionName: values.institutionName || undefined,
-        quantity: values.quantity,
+        quantity:
+          activity?.scoringType === "PER_ITEM"
+            ? values.items.reduce((total, item) => total + item.quantity, 0)
+            : activity?.scoringType === "PER_COMPLETE_KIT" && values.items.length
+              ? Math.floor(Math.min(...values.items.map((item) => item.quantity)))
+              : values.quantity,
         unit: values.unit || undefined,
+        details: values.durationMinutes === undefined
+          ? undefined
+          : { durationMinutes: values.durationMinutes },
         notes: values.notes || undefined,
         participantIds: values.participantIds,
         items: values.items.map(({ activityItemTypeId, quantity: itemQuantity }) => ({
@@ -168,7 +197,8 @@ export function NewSubmissionPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "submissions") }),
         queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "my-submissions") }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "activities") }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tenantResource(tenant, "activities") }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tenantResource(tenant, "activity-availability") }),
       ]);
       router.push(`/submissions/${submission.id}`);
     },
@@ -190,8 +220,20 @@ export function NewSubmissionPage() {
       toast.error("Adicione pelo menos uma evidência antes de enviar para validação.");
       return;
     }
+    if (
+      intent === "submit" &&
+      activity?.name?.toLocaleLowerCase("pt-BR").includes("conexão com idosos") &&
+      form.getValues("durationMinutes") === undefined
+    ) {
+      toast.error("Informe a duração da ação em minutos.");
+      return;
+    }
     if (intent === "submit" && blockers.length) {
       toast.error(blockers[0]);
+      return;
+    }
+    if (intent === "submit" && (availabilityQuery.isLoading || availabilityQuery.error || !availability)) {
+      toast.error("Aguarde a confirmação de disponibilidade para a data escolhida.");
       return;
     }
     return form.handleSubmit((values) => save.mutate({ values, intent }))();
@@ -209,7 +251,7 @@ export function NewSubmissionPage() {
               <h3>Sobre a ação</h3><p>Comece escolhendo a atividade e quando ela aconteceu.</p>
               <div className="form-grid two-columns">
                 <Field label="Atividade" error={form.formState.errors.activityId?.message}>
-                  <select className="input" {...form.register("activityId")}><option value="">Selecione</option>{(activities.data ?? []).filter((item) => item.status !== "INACTIVE").map((item) => <option key={item.id} value={item.id} disabled={item.availability?.available === false}>{item.name}{item.availability?.available === false ? " — indisponível" : ""}</option>)}</select>
+                  <select className="input" {...form.register("activityId")}><option value="">Selecione</option>{(activities.data ?? []).filter((item) => item.status !== "INACTIVE").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
                 </Field>
                 <Field label="Campanha" error={form.formState.errors.campaignId?.message}>
                   <select className="input" {...form.register("campaignId")}><option value="">Selecione</option>{(campaigns.data ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
@@ -234,7 +276,7 @@ export function NewSubmissionPage() {
             <div className="section-number">2</div>
             <div className="section-content">
               <h3>Detalhes da contribuição</h3><p>Informe as quantidades conforme a regra da atividade.</p>
-              {activity?.scoringType === "PER_ITEM" && fields.length ? (
+              {(activity?.scoringType === "PER_ITEM" || activity?.scoringType === "PER_COMPLETE_KIT") && fields.length ? (
                 <div className="dynamic-items">
                   {fields.map((field, index) => (
                     <Field key={field.id} label={field.label}>
@@ -254,18 +296,13 @@ export function NewSubmissionPage() {
               </div>
               {activity?.scoringType === "PER_COMPLETE_KIT" ? (
                 <p className="supportive-copy">
-                  Quantidade informada: {Number(quantity ?? 0)} kit(s) completo(s). A composição interna
-                  dos kits não está estruturada no contrato atual.
+                  Com as quantidades informadas, podem ser formados <strong>{completeKits} kit(s) completo(s)</strong>.
                 </p>
               ) : null}
               {activity?.name?.toLocaleLowerCase("pt-BR").includes("conexão com idosos") ? (
-                <div className="contract-notice">
-                  <Info size={17} />
-                  <p>
-                    A duração ainda não pode ser enviada: <code>details.durationMinutes</code> não existe
-                    em <code>CreateSubmissionDto</code>.
-                  </p>
-                </div>
+                <Field label="Duração (minutos)" error={form.formState.errors.durationMinutes?.message}>
+                  <Input type="number" min="0" step="1" {...form.register("durationMinutes")} />
+                </Field>
               ) : null}
             </div>
           </Card>
@@ -311,20 +348,18 @@ export function NewSubmissionPage() {
               <div><dt>Participantes</dt><dd>{participantIds.length}</dd></div>
               <div><dt>Evidências</dt><dd>{files.length}</dd></div>
             </dl>
-            {availability && !availability.available ? <p className="limit-reason">{availability.reason}</p> : null}
+            {availabilityQuery.isLoading ? <p className="summary-note">Consultando disponibilidade para {actionDate}…</p> : null}
+            <ApiErrorAlert error={availabilityQuery.error} fallback="Não foi possível consultar a disponibilidade" />
+            {availability ? <ActivityAvailabilityDetails availability={availability} /> : null}
             {blockers.length ? (
               <div className="submission-blockers" role="alert">
                 <strong>Antes de enviar</strong>
                 <ul>{blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>
               </div>
             ) : null}
-            <p className="contract-footnote">
-              A API atual informa disponibilidade na listagem, sem consulta por data. O servidor valida
-              novamente os limites no envio.
-            </p>
             <p className="summary-note">Seu registro ficará como rascunho até você escolher enviar para validação.</p>
             <Button type="button" variant="secondary" loading={save.isPending && save.variables?.intent === "draft"} onClick={() => void submitWith("draft")}><Save size={17} /> Salvar rascunho</Button>
-            <Button type="button" disabled={blockers.length > 0} loading={save.isPending && save.variables?.intent === "submit"} onClick={() => void submitWith("submit")}><Send size={17} /> Enviar para validação</Button>
+            <Button type="button" disabled={blockers.length > 0 || availabilityQuery.isLoading || Boolean(availabilityQuery.error) || !availability?.available} loading={save.isPending && save.variables?.intent === "submit"} onClick={() => void submitWith("submit")}><Send size={17} /> Enviar para validação</Button>
           </Card>
         </aside>
       </form>

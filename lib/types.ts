@@ -82,8 +82,12 @@ export interface ActivityItemType {
 export interface ActivityAvailability {
   available: boolean;
   reason: string | null;
-  usedOccurrences?: number;
-  approvedOccurrences?: number;
+  blockScope?: "CAMPAIGN" | "MONTH" | "DATE" | null;
+  blockedUntil?: string | null;
+  approvedOccurrences: number;
+  approvedOccurrencesThisMonth: number;
+  remainingOccurrences?: number | null;
+  remainingOccurrencesThisMonth?: number | null;
 }
 
 export interface Activity extends BaseEntity {
@@ -93,9 +97,13 @@ export interface Activity extends BaseEntity {
   scoringType?: ScoringType;
   points?: number;
   unit?: string;
-  minimumQuantity?: number;
-  maxOccurrences?: number;
-  minimumParticipationPercent?: number;
+  minimumQuantity?: number | null;
+  minimumParticipants?: number | null;
+  maxOccurrences?: number | null;
+  maxOccurrencesPerMonth?: number | null;
+  maxOccurrencesPerParticipant?: number | null;
+  maxOccurrencesPerParticipantPerMonth?: number | null;
+  minimumParticipationPercent?: number | null;
   repeatable?: boolean;
   evidenceRequired?: boolean;
   rulesJson?: Record<string, unknown>;
@@ -120,6 +128,7 @@ export interface Submission extends BaseEntity {
   institutionName?: string;
   quantity?: number;
   unit?: string;
+  details?: { durationMinutes?: number };
   notes?: string;
   status?: SubmissionStatus;
   calculatedPoints?: number;
@@ -134,11 +143,54 @@ export interface Submission extends BaseEntity {
 
 export interface Goal extends BaseEntity {
   campaignId?: string;
-  type?: "WEEKLY" | "MONTHLY";
+  activityId?: string | null;
+  title?: string;
+  description?: string | null;
+  type?: "WEEKLY" | "MONTHLY" | "CAMPAIGN" | "CUSTOM";
   startsAt?: string;
   endsAt?: string;
   targetPoints?: number;
   targetActions?: number;
+  targetParticipants?: number;
+  targetQuantity?: number;
+  unit?: string | null;
+}
+
+export interface GoalMetric {
+  points: number;
+  actions: number;
+  participants: number;
+  quantity: number;
+}
+
+export interface GoalProgress {
+  achieved: GoalMetric;
+  targets: GoalMetric;
+  remaining: GoalMetric;
+  percentages: GoalMetric;
+  overallPercentage: number;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "ACHIEVED" | "EXPIRED";
+}
+
+export interface MonthlyPlanInput {
+  campaignId: string;
+  activityId?: string;
+  titlePrefix: string;
+  targetPoints?: number;
+  targetActions?: number;
+  targetParticipants?: number;
+  targetQuantity?: number;
+  unit?: string;
+}
+
+export interface TeamProfile {
+  id: string;
+  name: string;
+  slug: string;
+  primaryColor: string;
+  secondaryColor: string;
+  hasLogo: boolean;
+  logoUrl?: string | null;
 }
 
 export interface DashboardSummary {
@@ -155,11 +207,14 @@ export interface DashboardSummary {
   myPendingActions: number;
   myTotalActions: number;
   activeParticipants: number;
+  disqualified: boolean;
   regularity: Array<{
     month: string;
     approvedActions: number;
     pendingActions: number;
     totalActions: number;
+    minimumActions?: number;
+    closed?: boolean;
     regular: boolean;
   }>;
   goals: Goal[];

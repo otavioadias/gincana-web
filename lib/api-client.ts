@@ -30,6 +30,10 @@ function translateBackendMessage(message: string) {
     "Only the author can submit": "Somente quem criou o registro pode enviá-lo para validação.",
     "Submission is not editable": "Este registro não pode mais ser editado.",
     "This evidence was already linked to a submission": "Esta evidência já foi utilizada em outro registro.",
+    "At least one target must be greater than zero": "Defina pelo menos um objetivo maior que zero.",
+    "Goal period must be within the campaign period": "O período da meta deve permanecer dentro da campanha.",
+    "Goal end must not precede start": "A data final da meta deve ser posterior à inicial.",
+    "Logo must not exceed 5 MB": "O logo deve ter no máximo 5 MB.",
   };
   if (known[message]) return known[message];
   if (message.startsWith("Minimum quantity is ")) {
@@ -37,6 +41,9 @@ function translateBackendMessage(message: string) {
   }
   if (message.startsWith("Minimum participation is ")) {
     return `A participação mínima exigida é ${message.slice("Minimum participation is ".length)}.`;
+  }
+  if (message.startsWith("Minimum participants is ")) {
+    return `Selecione pelo menos ${message.slice("Minimum participants is ".length)} participantes.`;
   }
   if (message.startsWith("Maximum of ")) {
     const limit = message.match(/\d+/)?.[0];

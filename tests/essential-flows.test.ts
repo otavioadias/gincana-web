@@ -3,7 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { canAccessPath } from "@/lib/access";
 import { ApiError, isPermissionError } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
-import { authService, memberService, submissionService, validationService } from "@/lib/services";
+import {
+  activityService,
+  authService,
+  dashboardService,
+  goalService,
+  memberService,
+  submissionService,
+  teamSettingsService,
+  validationService,
+} from "@/lib/services";
 import { tokenStorage } from "@/lib/storage";
 import { activityAvailability } from "@/features/activities/availability";
 import { estimatePoints } from "@/features/submissions/estimate";
@@ -12,7 +21,6 @@ import {
   submissionBlockers,
 } from "@/features/submissions/validation";
 import { validationSchema } from "@/features/validations/validation-schema";
-import { goalStatus } from "@/components/goals";
 import { teamBrandVariables } from "@/components/team-brand-provider";
 import type { Activity } from "@/lib/types";
 
@@ -116,15 +124,23 @@ describe("fluxos essenciais", () => {
       status: "ACTIVE",
       availability: {
         available: false,
-        reason: "Maximum of 1 submitted occurrence(s) reached",
-        usedOccurrences: 1,
+        reason: "Limite da campanha atingido",
+        blockScope: "CAMPAIGN",
+        blockedUntil: null,
         approvedOccurrences: 1,
+        approvedOccurrencesThisMonth: 1,
+        remainingOccurrences: 0,
+        remainingOccurrencesThisMonth: 0,
       },
     } as Activity;
     expect(activityAvailability(activity)).toEqual({
       available: false,
       used: 1,
-      reason: "A equipe já enviou o único registro permitido para esta atividade.",
+      reason: "Limite da campanha atingido",
+      blockScope: "CAMPAIGN",
+      blockedUntil: null,
+      remainingOccurrences: 0,
+      remainingOccurrencesThisMonth: 0,
     });
   });
 
@@ -151,7 +167,7 @@ describe("fluxos essenciais", () => {
                     },
                   ],
                 },
-                availability: { available: true, reason: null, usedOccurrences: 0, approvedOccurrences: 0 },
+                availability: { available: true, reason: null, approvedOccurrences: 0, approvedOccurrencesThisMonth: 0, remainingOccurrences: null, remainingOccurrencesThisMonth: null },
               },
             ]),
             { status: 200, headers: { "Content-Type": "application/json" } },
@@ -169,7 +185,7 @@ describe("fluxos essenciais", () => {
         id: "activity-1",
         campaignId: "campaign-1",
         name: "Doação de alimentos",
-        availability: { available: true, reason: null, usedOccurrences: 0, approvedOccurrences: 0 },
+        availability: { available: true, reason: null, approvedOccurrences: 0, approvedOccurrencesThisMonth: 0, remainingOccurrences: null, remainingOccurrencesThisMonth: null },
         itemTypes: [
           expect.objectContaining({
             id: "item-1",
@@ -245,7 +261,7 @@ describe("fluxos essenciais", () => {
     const draft = await submissionService.create({
       campaignId: "campaign",
       activityId: "activity",
-      actionDate: "2026-07-23T12:00:00.000Z",
+      actionDate: "2026-07-23",
     });
     expect(draft.status).toBe("DRAFT");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -280,6 +296,12 @@ describe("fluxos essenciais", () => {
         quantity: 2,
         participantCount: 0,
         activeParticipantCount: 5,
+        availability: {
+          available: true,
+          reason: null,
+          approvedOccurrences: 0,
+          approvedOccurrencesThisMonth: 0,
+        },
       }),
     ).toEqual(
       expect.arrayContaining([
@@ -291,20 +313,56 @@ describe("fluxos essenciais", () => {
     );
   });
 
-  it("calcula status de meta sem inventar progresso", () => {
-    expect(
-      goalStatus(
-        {
-          id: "goal",
-          startsAt: "2026-07-01",
-          endsAt: "2026-07-31",
-          targetPoints: 100,
-          targetActions: 2,
-        },
-        { points: 100, actions: 2 },
-        new Date("2026-07-15T12:00:00Z"),
-      ),
-    ).toBe("ACHIEVED");
+  it("consulta disponibilidade por atividade e data", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      available: false,
+      reason: "Limite mensal atingido",
+      blockScope: "MONTH",
+      blockedUntil: "2026-08-01",
+      approvedOccurrences: 2,
+      approvedOccurrencesThisMonth: 2,
+      remainingOccurrences: 4,
+      remainingOccurrencesThisMonth: 0,
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    const result = await activityService.availability("activity-1", "2026-07-23");
+    expect(result?.blockScope).toBe("MONTH");
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/activities/activity-1/availability?actionDate=2026-07-23",
+      expect.any(Object),
+    );
+  });
+
+  it("persiste tema e envia logo pelos endpoints oficiais", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      id: "team-1", name: "Equipe", slug: "equipe", primaryColor: "#123456",
+      secondaryColor: "#ABCDEF", hasLogo: true, logoUrl: "https://signed.example/logo",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await teamSettingsService.updateTheme({ primaryColor: "#123456", secondaryColor: "#ABCDEF" });
+    await teamSettingsService.uploadLogo(new File(["logo"], "logo.png", { type: "image/png" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "http://localhost:3000/team-settings/theme", expect.objectContaining({ method: "PATCH" }));
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBeInstanceOf(FormData);
+  });
+
+  it("usa progresso e planejamento mensal oficiais", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        achieved: { points: 10, actions: 1, participants: 2, quantity: 5 },
+        targets: { points: 20, actions: 2, participants: 4, quantity: 10 },
+        remaining: { points: 10, actions: 1, participants: 2, quantity: 5 },
+        percentages: { points: 50, actions: 50, participants: 50, quantity: 50 },
+        overallPercentage: 50, status: "IN_PROGRESS",
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ id: "goal-1", targetPoints: "20" }]), { status: 201, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await goalService.progress("goal-1")).overallPercentage).toBe(50);
+    const created = await goalService.monthlyPlan({ campaignId: "campaign-1", titlePrefix: "Plano", targetPoints: 20 });
+    expect(created[0]?.targetPoints).toBe(20);
+  });
+
+  it("consome desclassificação retornada no resumo", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ disqualified: true }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    expect((await dashboardService.summary()).disqualified).toBe(true);
   });
 
   it("gera variáveis globais de marca com variações derivadas", () => {

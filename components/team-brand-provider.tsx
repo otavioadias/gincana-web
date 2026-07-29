@@ -1,6 +1,10 @@
 "use client";
 
 import { createContext, useContext, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useSession } from "@/features/auth/session-provider";
+import { queryKeys } from "@/lib/query-keys";
+import { teamSettingsService } from "@/lib/services";
 
 export interface TeamBrand {
   name?: string;
@@ -55,7 +59,17 @@ export function TeamBrandProvider({
   brand?: TeamBrand;
   children: React.ReactNode;
 }) {
-  const value = useMemo(() => brand ?? {}, [brand]);
+  const { principal } = useSession();
+  const tenant = principal?.organizationId ?? null;
+  const settings = useQuery({
+    queryKey: queryKeys.tenant(tenant, "team-settings"),
+    queryFn: teamSettingsService.get,
+    enabled: Boolean(tenant),
+  });
+  const value = useMemo(
+    () => brand ?? settings.data ?? {},
+    [brand, settings.data],
+  );
   const variables = useMemo(() => teamBrandVariables(value), [value]);
   return (
     <TeamBrandContext.Provider value={value}>

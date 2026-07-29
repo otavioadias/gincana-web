@@ -442,8 +442,6 @@ As seguintes funcionalidades dependem de evolução do `gincana-api`:
 - troca de senha;
 - identificação de troca obrigatória em `/me`;
 - nome, logo e cores da organização em `/me`;
-- edição da identidade da organização pelo manager;
-- upload de logo;
 - fluxo completo de edição e reenvio após `NEEDS_CHANGES`;
 - propriedades detalhadas das entidades no OpenAPI.
 

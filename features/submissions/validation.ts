@@ -1,5 +1,4 @@
-import { activityAvailability } from "@/features/activities/availability";
-import type { Activity, Campaign } from "@/lib/types";
+import type { Activity, ActivityAvailability, Campaign } from "@/lib/types";
 
 interface SubmissionValidationInput {
   activity?: Activity;
@@ -9,26 +8,31 @@ interface SubmissionValidationInput {
   itemQuantities?: number[];
   participantCount: number;
   activeParticipantCount: number;
+  availability?: ActivityAvailability;
 }
 
 export function minimumParticipantCount(activity: Activity | undefined, activeCount: number) {
   const percentage = activity?.minimumParticipationPercent ?? 0;
-  return percentage > 0 ? Math.ceil((activeCount * percentage) / 100) : 0;
+  return Math.max(
+    activity?.minimumParticipants ?? 0,
+    percentage > 0 ? Math.ceil((activeCount * percentage) / 100) : 0,
+  );
 }
 
 export function submissionBlockers(input: SubmissionValidationInput) {
   const reasons: string[] = [];
   if (!input.activity) return reasons;
 
-  const availability = activityAvailability(input.activity);
-  if (!availability.available && availability.reason) reasons.push(availability.reason);
+  if (input.availability?.available === false) {
+    reasons.push(input.availability.reason ?? "A atividade não está disponível para esta data.");
+  }
 
   const quantity =
     input.activity.scoringType === "PER_ITEM"
       ? (input.itemQuantities ?? []).reduce((total, value) => total + value, 0)
       : (input.quantity ?? 0);
   if (
-    input.activity.minimumQuantity !== undefined &&
+    input.activity.minimumQuantity != null &&
     quantity < input.activity.minimumQuantity
   ) {
     reasons.push(

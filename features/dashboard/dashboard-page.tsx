@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Clock3,
   Heart,
-  Info,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -25,10 +24,11 @@ import {
 import { Card, PageHeading, Select } from "@/components/ui";
 import { ErrorState, LoadingState } from "@/components/states";
 import { GoalProgress } from "@/components/goal-progress";
-import { ActivityAvailabilityBadge } from "@/components/activity-limits";
+import { ActivityAvailabilityBadge, ActivityAvailabilityDetails } from "@/components/activity-limits";
+import { GoalStatusBadge } from "@/components/goals";
 import { StatusBadge } from "@/components/status-badge";
 import { useSession } from "@/features/auth/session-provider";
-import { activityService, campaignService, dashboardService, submissionService } from "@/lib/services";
+import { activityService, campaignService, dashboardService, goalService, submissionService } from "@/lib/services";
 import { queryKeys } from "@/lib/query-keys";
 import { appRole } from "@/lib/types";
 import { formatDate, formatNumber } from "@/lib/utils";
@@ -55,8 +55,14 @@ export function DashboardPage() {
     queryFn: () => submissionService.list(),
   });
   const activities = useQuery({
-    queryKey: queryKeys.tenant(tenant, "activities", campaignId),
-    queryFn: () => activityService.list(campaignId || undefined),
+    queryKey: queryKeys.tenant(tenant, "activities", { campaignId, actionDate: new Date().toISOString().slice(0, 10) }),
+    queryFn: () => activityService.list(campaignId || undefined, new Date().toISOString().slice(0, 10)),
+  });
+  const featuredGoal = summary.data?.goals?.[0];
+  const featuredProgress = useQuery({
+    queryKey: queryKeys.tenant(tenant, "goal-progress", featuredGoal?.id),
+    queryFn: () => goalService.progress(featuredGoal!.id),
+    enabled: Boolean(featuredGoal?.id),
   });
 
   if (summary.isLoading || byActivity.isLoading || activities.isLoading) return <LoadingState />;
@@ -66,9 +72,8 @@ export function DashboardPage() {
 
   const data = summary.data!;
   const role = appRole(principal);
-  const goal = data.goals?.[0];
+  const goal = featuredGoal;
   const recent = [...(submissions.data ?? [])].slice(0, 5);
-  const selectedCampaign = campaigns.data?.find((campaign) => campaign.id === campaignId);
   const blockedActivities = (activities.data ?? []).filter(
     (activity) => activity.availability?.available === false,
   );
@@ -99,6 +104,12 @@ export function DashboardPage() {
         </div>
         <div className="celebration-spark">✦</div>
       </Card>
+      {data.disqualified ? (
+        <Card className="disqualification-alert" role="alert">
+          <CircleSlashIcon />
+          <div><strong>Equipe desclassificada</strong><p>O backend identificou um ou mais meses encerrados sem a regularidade mínima exigida.</p></div>
+        </Card>
+      ) : null}
 
       <section className="metric-grid" aria-label="Indicadores principais">
         <Card className="metric-card">
@@ -151,17 +162,13 @@ export function DashboardPage() {
                     <small>
                       {month.regular
                         ? "Regular"
-                        : `Pendente${selectedCampaign?.minimumActionsPerMonth ? ` · mínimo ${selectedCampaign.minimumActionsPerMonth}` : ""}`}
+                        : `Pendente${month.minimumActions ? ` · mínimo ${month.minimumActions}` : ""}`}
                     </small>
                   </div>
                 ))}
               </div>
             </>
           ) : <div className="chart-empty">Os meses aparecerão aqui após a primeira ação enviada.</div>}
-          <div className="contract-footnote">
-            <Info size={14} /> O contrato do dashboard ainda não retorna <code>disqualified</code>;
-            por isso a interface não presume desclassificação.
-          </div>
         </Card>
 
         <Card className="goal-card">
@@ -171,8 +178,13 @@ export function DashboardPage() {
           </div>
           {goal ? (
             <>
-              <GoalProgress label="Pontos" current={data.approvedPoints} target={goal.targetPoints ?? 0} />
-              <GoalProgress label="Ações" current={data.approvedActions} target={goal.targetActions ?? 0} kind="ações" />
+              <h4>{goal.title}</h4>
+              {featuredProgress.data ? <GoalStatusBadge status={featuredProgress.data.status} /> : null}
+              {featuredProgress.isLoading ? <p className="muted-copy">Carregando progresso oficial…</p> : null}
+              {featuredProgress.data?.targets.points ? <GoalProgress label="Pontos" current={featuredProgress.data.achieved.points} target={featuredProgress.data.targets.points} /> : null}
+              {featuredProgress.data?.targets.actions ? <GoalProgress label="Ações" current={featuredProgress.data.achieved.actions} target={featuredProgress.data.targets.actions} kind="ações" /> : null}
+              {featuredProgress.data?.targets.participants ? <GoalProgress label="Participantes" current={featuredProgress.data.achieved.participants} target={featuredProgress.data.targets.participants} kind="participantes" /> : null}
+              {featuredProgress.data?.targets.quantity ? <GoalProgress label="Quantidade" current={featuredProgress.data.achieved.quantity} target={featuredProgress.data.targets.quantity} kind={goal.unit ?? "unidades"} /> : null}
               <p className="supportive-copy">Sem pressão: a meta serve como direção para celebrar o avanço coletivo.</p>
             </>
           ) : <p className="muted-copy">Ainda não há uma meta configurada para esta campanha.</p>}
@@ -220,14 +232,11 @@ export function DashboardPage() {
           <div className="blocked-activity-list">
             {blockedActivities.length ? blockedActivities.map((activity) => (
               <div key={activity.id}>
-                <div><strong>{activity.name}</strong><span>{activity.availability?.reason ?? "Indisponível no momento"}</span></div>
+                <div><strong>{activity.name}</strong>{activity.availability ? <ActivityAvailabilityDetails availability={activity.availability} /> : null}</div>
                 <ActivityAvailabilityBadge available={false} reason={activity.availability?.reason} />
               </div>
             )) : <p className="muted-copy">Nenhuma atividade bloqueada no filtro atual.</p>}
           </div>
-          <p className="contract-footnote">
-            Datas de liberação dependem de <code>blockedUntil</code>, campo ainda ausente no OpenAPI.
-          </p>
         </Card>
       </section>
     </>
@@ -236,4 +245,8 @@ export function DashboardPage() {
 
 function TargetIcon() {
   return <span className="metric-icon metric-green"><ArrowUpRight size={20} /></span>;
+}
+
+function CircleSlashIcon() {
+  return <span aria-hidden>!</span>;
 }

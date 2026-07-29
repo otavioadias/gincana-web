@@ -11,6 +11,7 @@ import { z } from "zod";
 import { Button, Card, Field, Input, PageHeading, Select } from "@/components/ui";
 import {
   ActivityAvailabilityBadge,
+  ActivityAvailabilityDetails,
   ActivityLimitForm,
   ActivityLimitSummary,
 } from "@/components/activity-limits";
@@ -45,6 +46,10 @@ const createSchema = z.object({
     (value) => (value === "" ? undefined : value),
     z.coerce.number().min(1).optional(),
   ),
+  maxOccurrencesPerMonth: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().min(1).optional()),
+  maxOccurrencesPerParticipant: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().min(1).optional()),
+  maxOccurrencesPerParticipantPerMonth: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().min(1).optional()),
+  minimumParticipants: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().min(1).optional()),
   minimumQuantity: z.preprocess(
     (value) => (value === "" ? undefined : value),
     z.coerce.number().min(0).optional(),
@@ -67,9 +72,10 @@ export function ActivitiesPage() {
   const [scoring, setScoring] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [limitActivity, setLimitActivity] = useState<Activity | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
   const activities = useQuery({
-    queryKey: queryKeys.tenant(tenant, "activities", campaign),
-    queryFn: () => activityService.list(campaign || undefined),
+    queryKey: queryKeys.tenant(tenant, "activities", { campaign, actionDate: today }),
+    queryFn: () => activityService.list(campaign || undefined, today),
   });
   const campaigns = useQuery({ queryKey: queryKeys.tenant(tenant, "campaigns"), queryFn: campaignService.list });
   const form = useForm<CreateInput, unknown, CreateValues>({
@@ -82,7 +88,7 @@ export function ActivitiesPage() {
       toast.success("Atividade criada");
       form.reset({ scoringType: "FIXED", points: 0, evidenceRequired: true });
       setShowForm(false);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "activities", campaign) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tenantResource(tenant, "activities") });
     },
     onError: (error) => toast.error(translateApiError(error, "Não foi possível criar a atividade")),
   });
@@ -92,7 +98,7 @@ export function ActivitiesPage() {
     onSuccess: async () => {
       toast.success("Limites atualizados");
       setLimitActivity(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "activities") });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tenantResource(tenant, "activities") });
     },
     onError: (error) => toast.error(translateApiError(error, "Não foi possível atualizar os limites")),
   });
@@ -129,7 +135,11 @@ export function ActivitiesPage() {
             <Field label="Pontos"><Input type="number" min="0" step="0.1" {...form.register("points")} /></Field>
             <Field label="Unidade"><Input placeholder="ex.: kg, item, kit" {...form.register("unit")} /></Field>
             <Field label="Limite de ocorrências"><Input type="number" min="1" {...form.register("maxOccurrences")} /></Field>
+            <Field label="Limite mensal"><Input type="number" min="1" {...form.register("maxOccurrencesPerMonth")} /></Field>
+            <Field label="Limite por participante"><Input type="number" min="1" {...form.register("maxOccurrencesPerParticipant")} /></Field>
+            <Field label="Limite participante/mês"><Input type="number" min="1" {...form.register("maxOccurrencesPerParticipantPerMonth")} /></Field>
             <Field label="Quantidade mínima"><Input type="number" min="0" step="0.1" {...form.register("minimumQuantity")} /></Field>
+            <Field label="Participantes mínimos"><Input type="number" min="1" {...form.register("minimumParticipants")} /></Field>
             <Field label="Participação mínima (%)"><Input type="number" min="0" max="100" step="0.1" {...form.register("minimumParticipationPercent")} /></Field>
             <label className="remember-option">
               <input type="checkbox" {...form.register("evidenceRequired")} />
@@ -172,8 +182,8 @@ export function ActivitiesPage() {
                   {max ? <div><span>Registros da equipe</span><strong>{availability.used} de {max}</strong></div> : <div><span>Recorrência</span><strong>Livre</strong></div>}
                 </div>
                 {max ? <div className="progress-track"><span style={{ width: `${Math.min(100, (availability.used / max) * 100)}%` }} /></div> : null}
-                <ActivityLimitSummary activity={activity} used={availability.used} />
-                {!availability.available ? <p className="limit-reason">{availability.reason}</p> : null}
+                <ActivityLimitSummary activity={activity} availability={activity.availability} />
+                {activity.availability ? <ActivityAvailabilityDetails availability={activity.availability} /> : null}
                 {role === "MANAGER" ? (
                   <Button type="button" variant="secondary" onClick={() => setLimitActivity(activity)}>
                     <Pencil size={15} /> Configurar limites

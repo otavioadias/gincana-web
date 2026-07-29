@@ -34,13 +34,9 @@ Todas as chaves do TanStack Query incluem `organizationId`, e login/logout limpa
 - `/auth/login`, `/auth/refresh`, `/me` e os endpoints de dashboard documentam respostas como `object` genérico. Os adapters em `lib/services.ts` isolam os formatos confirmados pelo código do back-end.
 - `/me` retorna apenas o principal autenticado; não inclui nome, logo, cores ou `mustChangePassword`.
 - Não existe endpoint de alteração de senha.
-- Não existe endpoint de configurações da organização acessível a `MANAGER`, nem upload de logo. A tela de identidade oferece prévia segura e mantém o salvamento desabilitado.
 - O upload documentado usa `multipart/form-data`, campo `file`, até 10 MB por arquivo. O controller aceita JPG, PNG, WebP e PDF.
-- Não existem `/team-settings`, `/activities/{id}/availability`, `/goals/{id}/progress` ou `/goals/monthly-plan`. O frontend usa a disponibilidade embutida em `GET /activities` e não simula os demais contratos.
-- `Activity` suporta apenas limite total (`maxOccurrences`), quantidade mínima e percentual mínimo. Limites mensais, individuais, `minimumParticipants` e `blockedUntil` não constam no contrato.
-- `Goal` aceita apenas `WEEKLY` e `MONTHLY`, datas, pontos e ações. Título, descrição, metas de participantes/quantidade, status e progresso não estão documentados.
-- `CreateSubmissionDto` não possui `details`, portanto `durationMinutes` não pode ser enviado. Também não há contrato estruturado para a composição de kits ou cálculo mínimo de cartas.
-- O dashboard não retorna `disqualified` nem o motivo/data de desbloqueio de atividades; a interface não infere esses dados.
+- Configurações da equipe, disponibilidade por data, limites avançados, progresso de metas e planejamento mensal usam os endpoints tipados do contrato.
+- O resumo do dashboard continua descrito como `object` genérico, embora a resposta do backend inclua `disqualified`; o adapter mantém esse formato isolado em `lib/types.ts`.
 
 ## Docker
 

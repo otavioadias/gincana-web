@@ -45,10 +45,14 @@ export function ColorPickerField({
 
 export function TeamLogoUploader({
   disabled,
+  currentLogo,
+  loading,
   onChange,
 }: {
   disabled?: boolean;
-  onChange?: (file: File | null) => void;
+  currentLogo?: string | null;
+  loading?: boolean;
+  onChange?: (file: File) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -65,7 +69,7 @@ export function TeamLogoUploader({
       return;
     }
     setFile(next);
-    onChange?.(next);
+    if (next) onChange?.(next);
   };
 
   return (
@@ -79,14 +83,18 @@ export function TeamLogoUploader({
         onChange={(event) => select(event.target.files?.[0] ?? null)}
       />
       <div className="logo-drop">
-        <ImageUp aria-hidden />
+        {currentLogo ? (
+          // A URL assinada é temporária e não deve passar pelo cache do otimizador.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="team-logo-preview" src={currentLogo} alt="Logo atual da equipe" />
+        ) : <ImageUp aria-hidden />}
         <strong>{file?.name ?? "Logo da equipe"}</strong>
         <span>PNG, JPEG ou WebP, até 5 MB.</span>
-        <Button type="button" variant="secondary" disabled={disabled} onClick={() => input.current?.click()}>
+        <Button type="button" variant="secondary" disabled={disabled} loading={loading} onClick={() => input.current?.click()}>
           {file ? "Substituir imagem" : "Escolher imagem"}
         </Button>
         {file ? (
-          <Button type="button" variant="ghost" disabled={disabled} onClick={() => select(null)}>
+          <Button type="button" variant="ghost" disabled={disabled || loading} onClick={() => setFile(null)}>
             <Trash2 size={15} /> Remover seleção
           </Button>
         ) : null}

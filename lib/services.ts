@@ -6,11 +6,14 @@ import type {
   DashboardSummary,
   Evidence,
   Goal,
+  GoalProgress,
   Membership,
   Organization,
   Principal,
   Submission,
   TokenPair,
+  TeamProfile,
+  MonthlyPlanInput,
 } from "@/lib/types";
 
 function query(params: Record<string, string | undefined>) {
@@ -22,12 +25,27 @@ function query(params: Record<string, string | undefined>) {
   return value ? `?${value}` : "";
 }
 
+function numberOrNull(value: unknown) {
+  return value === null || value === undefined ? value : Number(value);
+}
+
 function normalizeActivity(input: unknown): Activity {
   if (!input || typeof input !== "object") return {} as Activity;
 
   const record = input as Record<string, unknown>;
   const activity = record.activity && typeof record.activity === "object" ? (record.activity as Activity) : (record as unknown as Activity);
-  const availability = record.availability && typeof record.availability === "object" ? (record.availability as Activity["availability"]) : undefined;
+  const rawAvailability = record.availability && typeof record.availability === "object"
+    ? (record.availability as NonNullable<Activity["availability"]>)
+    : undefined;
+  const availability = rawAvailability
+    ? {
+        ...rawAvailability,
+        approvedOccurrences: Number(rawAvailability.approvedOccurrences ?? 0),
+        approvedOccurrencesThisMonth: Number(rawAvailability.approvedOccurrencesThisMonth ?? 0),
+        remainingOccurrences: numberOrNull(rawAvailability.remainingOccurrences) as number | null | undefined,
+        remainingOccurrencesThisMonth: numberOrNull(rawAvailability.remainingOccurrencesThisMonth) as number | null | undefined,
+      }
+    : undefined;
   const itemTypes = Array.isArray(activity.itemTypes)
     ? activity.itemTypes.map((item) => {
         const itemRecord = item as unknown as Record<string, unknown>;
@@ -46,18 +64,26 @@ function normalizeActivity(input: unknown): Activity {
   return {
     ...activity,
     points: Number(activity.points ?? 0),
-    minimumQuantity:
-      activity.minimumQuantity === null || activity.minimumQuantity === undefined
-        ? undefined
-        : Number(activity.minimumQuantity),
-    minimumParticipationPercent:
-      activity.minimumParticipationPercent === null ||
-      activity.minimumParticipationPercent === undefined
-        ? undefined
-        : Number(activity.minimumParticipationPercent),
+    minimumQuantity: numberOrNull(activity.minimumQuantity),
+    minimumParticipants: numberOrNull(activity.minimumParticipants),
+    minimumParticipationPercent: numberOrNull(activity.minimumParticipationPercent),
+    maxOccurrences: numberOrNull(activity.maxOccurrences),
+    maxOccurrencesPerMonth: numberOrNull(activity.maxOccurrencesPerMonth),
+    maxOccurrencesPerParticipant: numberOrNull(activity.maxOccurrencesPerParticipant),
+    maxOccurrencesPerParticipantPerMonth: numberOrNull(activity.maxOccurrencesPerParticipantPerMonth),
     ...(itemTypes ? { itemTypes } : {}),
     ...(availability ? { availability } : {}),
   } as Activity;
+}
+
+function normalizeGoal(goal: Goal): Goal {
+  return {
+    ...goal,
+    targetPoints: Number(goal.targetPoints ?? 0),
+    targetActions: Number(goal.targetActions ?? 0),
+    targetParticipants: Number(goal.targetParticipants ?? 0),
+    targetQuantity: Number(goal.targetQuantity ?? 0),
+  };
 }
 
 function normalizeActivities(payload: unknown): Activity[] {
@@ -114,14 +140,18 @@ export const campaignService = {
 };
 
 export const activityService = {
-  list: async (campaignId?: string) =>
+  list: async (campaignId?: string, actionDate?: string) =>
     normalizeActivities(
-      await apiRequest<unknown>(`/activities${query({ campaignId })}`),
+      await apiRequest<unknown>(`/activities${query({ campaignId, actionDate })}`),
     ),
   get: async (id: string) => normalizeActivity(await apiRequest<unknown>(`/activities/${id}`)),
   create: async (body: unknown) => normalizeActivity(await apiRequest<unknown>("/activities", { method: "POST", body })),
   update: async (id: string, body: unknown) =>
     normalizeActivity(await apiRequest<unknown>(`/activities/${id}`, { method: "PATCH", body })),
+  availability: (id: string, actionDate: string) =>
+    apiRequest<Activity["availability"]>(
+      `/activities/${id}/availability${query({ actionDate })}`,
+    ),
 };
 
 export const submissionService = {
@@ -164,19 +194,37 @@ export const validationService = {
 
 export const memberService = {
   list: () => apiRequest<Membership[]>("/members"),
-  participants: () => apiRequest<Membership[]>("/members/participants"),
+  participants: (organizationId?: string) =>
+    apiRequest<Membership[]>(`/members/participants${query({ organizationId })}`),
   create: (body: unknown) => apiRequest<Membership>("/members", { method: "POST", body }),
   update: (id: string, body: unknown) =>
     apiRequest<Membership>(`/members/${id}`, { method: "PATCH", body }),
 };
 
 export const goalService = {
-  list: () => apiRequest<Goal[]>("/goals"),
-  get: (id: string) => apiRequest<Goal>(`/goals/${id}`),
-  create: (body: unknown) => apiRequest<Goal>("/goals", { method: "POST", body }),
+  list: (campaignId?: string) =>
+    apiRequest<Goal[]>(`/goals${query({ campaignId })}`).then((goals) => goals.map(normalizeGoal)),
+  get: (id: string) => apiRequest<Goal>(`/goals/${id}`).then(normalizeGoal),
+  create: (body: unknown) => apiRequest<Goal>("/goals", { method: "POST", body }).then(normalizeGoal),
   update: (id: string, body: unknown) =>
-    apiRequest<Goal>(`/goals/${id}`, { method: "PATCH", body }),
+    apiRequest<Goal>(`/goals/${id}`, { method: "PATCH", body }).then(normalizeGoal),
   remove: (id: string) => apiRequest<void>(`/goals/${id}`, { method: "DELETE" }),
+  progress: (id: string) => apiRequest<GoalProgress>(`/goals/${id}/progress`),
+  monthlyPlan: (body: MonthlyPlanInput) =>
+    apiRequest<Goal[]>("/goals/monthly-plan", { method: "POST", body }).then((goals) => goals.map(normalizeGoal)),
+};
+
+export const teamSettingsService = {
+  get: () => apiRequest<TeamProfile>("/team-settings"),
+  updateTheme: (body: { primaryColor: string; secondaryColor: string }) =>
+    apiRequest<TeamProfile>("/team-settings/theme", { method: "PATCH", body }),
+  uploadLogo: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<TeamProfile>("/team-settings/logo", { method: "POST", body });
+  },
+  removeLogo: () =>
+    apiRequest<void>("/team-settings/logo", { method: "DELETE" }),
 };
 
 export const organizationService = {
