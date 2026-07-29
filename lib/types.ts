@@ -1,6 +1,6 @@
-export type PlatformRole = "SUPER_ADMIN" | "USER";
-export type MembershipRole = "MANAGER" | "VALIDATOR" | "MEMBER";
-export type AppRole = "SUPER_ADMIN" | MembershipRole;
+export type PlatformRole = "SUPER_ADMIN" | "VALIDATOR" | "LEADER" | "USER";
+export type MembershipRole = "MANAGER" | "MEMBER";
+export type AppRole = "SUPER_ADMIN" | "VALIDATOR" | "LEADER_SETUP" | MembershipRole;
 export type EntityStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED";
 export type CampaignStatus = "DRAFT" | "ACTIVE" | "CLOSED" | "ARCHIVED";
 export type ActivityStatus = "ACTIVE" | "INACTIVE";
@@ -53,6 +53,7 @@ export interface Organization extends BaseEntity {
 }
 
 export interface Membership extends BaseEntity {
+  userId?: string;
   name?: string;
   email?: string;
   role?: MembershipRole;
@@ -73,7 +74,16 @@ export interface ActivityItemType {
   id?: string;
   name?: string;
   points?: number;
+  pointsPerUnit?: number;
   unit?: string;
+  minimumQuantity?: number;
+}
+
+export interface ActivityAvailability {
+  available: boolean;
+  reason: string | null;
+  usedOccurrences?: number;
+  approvedOccurrences?: number;
 }
 
 export interface Activity extends BaseEntity {
@@ -92,6 +102,7 @@ export interface Activity extends BaseEntity {
   status?: ActivityStatus;
   itemTypes?: ActivityItemType[];
   approvedOccurrences?: number;
+  availability?: ActivityAvailability;
 }
 
 export interface Evidence extends BaseEntity {
@@ -102,6 +113,7 @@ export interface Evidence extends BaseEntity {
 }
 
 export interface Submission extends BaseEntity {
+  createdBy?: string;
   campaignId?: string;
   activityId?: string;
   actionDate?: string;
@@ -114,6 +126,7 @@ export interface Submission extends BaseEntity {
   approvedPoints?: number;
   validationReason?: string;
   activity?: Activity;
+  organization?: Organization;
   evidences?: Evidence[];
   submittedAt?: string;
   reviewedAt?: string;
@@ -131,10 +144,24 @@ export interface Goal extends BaseEntity {
 export interface DashboardSummary {
   approvedPoints: number;
   pendingPoints: number;
+  totalPoints: number;
   approvedActions: number;
   pendingActions: number;
+  totalActions: number;
+  myApprovedPoints: number;
+  myPendingPoints: number;
+  myTotalPoints: number;
+  myApprovedActions: number;
+  myPendingActions: number;
+  myTotalActions: number;
   activeParticipants: number;
-  regularity: Array<{ month: string; approvedActions: number; regular: boolean }>;
+  regularity: Array<{
+    month: string;
+    approvedActions: number;
+    pendingActions: number;
+    totalActions: number;
+    regular: boolean;
+  }>;
   goals: Goal[];
 }
 
@@ -142,12 +169,19 @@ export interface ActivitySummary {
   activityId: string;
   activityName: string;
   approvedPoints: number;
+  pendingPoints: number;
+  totalPoints: number;
   approvedActions: number;
+  pendingActions: number;
+  totalActions: number;
 }
 
 export function appRole(principal: Principal | null): AppRole | null {
   if (!principal) return null;
-  return principal.platformRole === "SUPER_ADMIN"
-    ? "SUPER_ADMIN"
-    : principal.membershipRole;
+  if (principal.platformRole === "SUPER_ADMIN") return "SUPER_ADMIN";
+  if (principal.platformRole === "VALIDATOR") return "VALIDATOR";
+  if (principal.platformRole === "LEADER" && !principal.membershipRole) {
+    return "LEADER_SETUP";
+  }
+  return principal.membershipRole;
 }

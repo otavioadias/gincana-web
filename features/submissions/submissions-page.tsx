@@ -10,14 +10,16 @@ import { StatusBadge } from "@/components/status-badge";
 import { useSession } from "@/features/auth/session-provider";
 import { submissionService } from "@/lib/services";
 import { queryKeys } from "@/lib/query-keys";
+import { appRole } from "@/lib/types";
 import { formatDate, formatNumber } from "@/lib/utils";
 
 export function SubmissionsPage() {
   const { principal } = useSession();
   const tenant = principal?.organizationId ?? null;
+  const role = appRole(principal);
   const [status, setStatus] = useState("");
   const submissions = useQuery({
-    queryKey: queryKeys.tenant(tenant, "submissions", status),
+    queryKey: queryKeys.tenant(tenant, role === "MEMBER" ? "my-submissions" : "submissions", status),
     queryFn: () => submissionService.list(status || undefined),
   });
   if (submissions.isLoading) return <LoadingState />;
@@ -26,9 +28,9 @@ export function SubmissionsPage() {
   return (
     <>
       <PageHeading
-        eyebrow="Sua participação"
-        title="Minhas ações"
-        description="Acompanhe rascunhos, envios e o retorno da equipe de validação."
+        eyebrow="Andamento compartilhado"
+        title="Ações da equipe"
+        description="Toda a equipe acompanha os registros, os pontos pendentes e o que já foi aprovado."
         action={<Link href="/submissions/new" className="button button-primary"><FilePlus2 size={17} /> Nova ação</Link>}
       />
       <Card className="filter-bar">
@@ -53,12 +55,12 @@ export function SubmissionsPage() {
                 <div><h3>{item.activity?.name ?? "Ação solidária"}</h3><p>{item.institutionName ?? "Instituição não informada"} · {formatDate(item.actionDate)}</p></div>
                 <StatusBadge status={item.status} />
               </div>
-              <div className="submission-points"><span>Pontos</span><strong>{formatNumber(item.approvedPoints ?? item.calculatedPoints)}</strong></div>
+              <div className="submission-points"><span>{item.status === "APPROVED" || item.status === "PARTIALLY_APPROVED" ? "Aprovados" : "Estimados"}</span><strong>{formatNumber(item.status === "APPROVED" || item.status === "PARTIALLY_APPROVED" ? item.approvedPoints : item.calculatedPoints)}</strong></div>
               <Link href={`/submissions/${item.id}`} className="icon-button row-arrow" aria-label="Ver detalhes"><ArrowRight size={18} /></Link>
             </Card>
           ))}
         </div>
-      ) : <EmptyState title="Nenhuma ação por aqui" description="Seu primeiro registro pode começar como rascunho e ser enviado quando estiver pronto." action={<Link href="/activities" className="button button-secondary">Explorar atividades</Link>} />}
+      ) : <EmptyState title="Nenhuma ação por aqui" description="O primeiro registro da equipe pode começar como rascunho e ser enviado quando estiver pronto." action={<Link href="/activities" className="button button-secondary">Explorar atividades</Link>} />}
     </>
   );
 }

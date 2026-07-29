@@ -4,15 +4,15 @@ Este documento apresenta como a plataforma deve ser utilizada, quais áreas est�
 
 ## 1. Visão geral
 
-A Gincana Solidária é uma plataforma multi-organização. Cada pessoa acessa somente a organização à qual está vinculada, exceto o `SUPER_ADMIN`, que administra o cadastro das organizações sem acessar seus dados internos.
+A Gincana Solidária é uma plataforma multi-equipe. Participantes e líderes acessam somente sua equipe. `VALIDATOR` e `SUPER_ADMIN` são perfis da plataforma e não pertencem a nenhuma equipe.
 
 Os perfis disponíveis são:
 
 | Perfil | Responsabilidade principal |
 | --- | --- |
-| `SUPER_ADMIN` | Cadastrar, ativar e suspender organizações |
-| `MANAGER` | Administrar campanha, equipe, atividades, metas e validações |
-| `VALIDATOR` | Analisar ações submetidas e registrar a decisão |
+| `SUPER_ADMIN` | Cadastrar, ativar e suspender equipes já com seu líder inicial |
+| `MANAGER` | Liderar a equipe, participar e administrar pessoas, campanhas, atividades, metas e validações |
+| `VALIDATOR` | Analisar ações de todas as equipes sem participar delas |
 | `MEMBER` | Participar das atividades e registrar ações solidárias |
 
 ## 2. Acesso à plataforma
@@ -21,16 +21,26 @@ Os perfis disponíveis são:
 
 1. A pessoa acessa `/login`.
 2. Informa e-mail e senha.
-3. Se participar de mais de uma organização, pode informar o slug da organização.
-4. A aplicação envia os dados para `POST /auth/login`.
-5. Após o login, consulta `GET /me` para identificar o perfil e a organização.
-6. O redirecionamento acontece conforme o perfil:
+3. A aplicação envia os dados para `POST /auth/login`; não é necessário escolher organização.
+4. Após o login, consulta `GET /me` para identificar o perfil e a equipe.
+5. O redirecionamento acontece conforme o perfil:
    - `SUPER_ADMIN`: `/admin/organizations`;
+   - `VALIDATOR`: `/validations`;
+   - líder sem equipe: `/create-team`;
    - demais perfis: `/dashboard`.
 
-Os tokens são mantidos em `sessionStorage` por uma camada centralizada. Quando o token de acesso expira, a aplicação tenta renová-lo por `POST /auth/refresh`. Requisições simultâneas compartilham a mesma tentativa de renovação.
+Sem **Manter conectado**, os tokens ficam em `sessionStorage` e são removidos ao fechar a aba. Com a opção marcada, ficam em `localStorage` e a sessão sobrevive ao fechamento do navegador. Quando o token de acesso expira, a aplicação tenta renová-lo por `POST /auth/refresh`.
 
-### 2.2 Encerramento da sessão
+### 2.2 Criação de equipe
+
+1. Na tela de login, selecione **Primeiro acesso de líder**.
+2. Informe nome, e-mail e uma senha de pelo menos 6 caracteres.
+3. A aplicação cria a conta `LEADER` em `POST /auth/register-leader`.
+4. Sem uma equipe, o primeiro acesso é direcionado para `/create-team`.
+5. O líder informa o nome e a aplicação chama `POST /teams`.
+6. A pessoa entra automaticamente como líder (`MANAGER`) e participante.
+
+### 2.3 Encerramento da sessão
 
 Ao selecionar **Sair**:
 
@@ -41,7 +51,7 @@ Ao selecionar **Sair**:
 
 Essa limpeza evita que dados da organização anterior apareçam em uma nova sessão.
 
-### 2.3 Troca obrigatória de senha
+### 2.4 Troca obrigatória de senha
 
 A interface contém uma tela informativa em `/change-password`, mas o fluxo ainda não pode ser concluído porque o contrato atual do `gincana-api`:
 
@@ -60,6 +70,8 @@ Em `/dashboard`, o participante pode consultar:
 
 - pontos aprovados;
 - pontos ainda em análise;
+- andamento geral, somando o aprovado e o pendente sem misturar seus significados;
+- andamento individual da pessoa autenticada;
 - quantidade de ações;
 - participação coletiva;
 - progresso das metas;
@@ -125,9 +137,10 @@ Ao selecionar **Enviar para validação**:
 
 ### 3.6 Acompanhar as ações
 
-Em `/submissions`, o participante pode:
+Em `/submissions`, qualquer integrante pode:
 
 - filtrar por status;
+- acompanhar ações de toda a equipe, inclusive pendentes de validação;
 - consultar atividade, instituição, data e pontos;
 - abrir o detalhe de cada ação.
 
@@ -145,11 +158,11 @@ Quando o status for `NEEDS_CHANGES`, o participante deve verificar a justificati
 
 ## 4. Fluxo do VALIDATOR
 
-O `VALIDATOR` consulta o dashboard, as atividades e a fila de validação. Ele não administra equipe, campanha, meta ou identidade da organização.
+O `VALIDATOR` não possui membership e acessa apenas a fila global. Ele não vê dashboard, atividades, pessoas, metas ou configurações internas como integrante de uma equipe.
 
 ### 4.1 Consultar a fila
 
-Em `/validations`:
+Em `/validations`, a aplicação usa `/validation/submissions`:
 
 1. selecione o filtro de status;
 2. identifique as ações enviadas ou em análise;
@@ -178,14 +191,14 @@ As decisões possíveis são:
 Ao confirmar, a aplicação chama:
 
 ```text
-POST /submissions/{id}/validate
+POST /validation/submissions/{id}/validate
 ```
 
 Uma justificativa deve ser objetiva, respeitosa e útil para quem registrou a ação.
 
 ## 5. Fluxo do MANAGER
 
-O `MANAGER` possui as funções dos participantes e validadores, além das áreas administrativas da própria organização.
+O `MANAGER`, chamado de **Líder** na interface, possui as funções dos participantes e as áreas administrativas da própria equipe. A validação final é exclusiva do `VALIDATOR` da plataforma.
 
 ### 5.1 Administrar a equipe
 
@@ -194,7 +207,7 @@ Em `/members`, o manager pode:
 - listar as pessoas;
 - visualizar perfil e status;
 - criar um acesso;
-- escolher `MANAGER`, `VALIDATOR` ou `MEMBER`;
+- escolher Líder (`MANAGER`) ou Participante (`MEMBER`);
 - bloquear ou reativar um acesso;
 - definir uma nova senha temporária.
 
@@ -203,7 +216,7 @@ Para criar uma pessoa:
 1. selecione **Adicionar pessoa**;
 2. informe nome e e-mail;
 3. escolha o perfil;
-4. defina uma senha temporária com pelo menos 12 caracteres;
+4. defina uma senha temporária com pelo menos 6 caracteres;
 5. confirme a criação.
 
 ### 5.2 Administrar campanhas
@@ -264,7 +277,7 @@ As metas servem como direção coletiva e não como cobrança individual.
 
 ### 5.5 Validar ações
 
-O manager também pode utilizar `/validations` e seguir o mesmo fluxo descrito para o `VALIDATOR`.
+O líder não acessa `/validations`; isso preserva a independência da aprovação.
 
 ### 5.6 Configurar a identidade visual
 
@@ -294,7 +307,7 @@ Em `/admin/organizations`:
 1. selecione **Nova organização**;
 2. informe nome e slug;
 3. informe nome e e-mail do manager inicial;
-4. defina uma senha temporária com pelo menos 12 caracteres;
+4. defina uma senha temporária com pelo menos 6 caracteres;
 5. informe cores opcionais;
 6. confirme a criação.
 
@@ -393,7 +406,7 @@ Significado dos status:
 ### Conferência final
 
 1. Retornar à conta member.
-2. Abrir **Minhas ações**.
+2. Abrir **Ações da equipe**.
 3. Verificar status, pontuação e linha do tempo.
 4. Consultar o dashboard atualizado.
 

@@ -1,38 +1,61 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Eye, EyeOff, HeartHandshake, Leaf, LockKeyhole, Mail } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, HeartHandshake, Leaf, LockKeyhole, Mail, UserRoundCheck } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button, Field, Input } from "@/components/ui";
 import { useSession } from "@/features/auth/session-provider";
 
 const schema = z.object({
+  mode: z.enum(["login", "register"]),
   email: z.email("Informe um e-mail válido"),
-  password: z.string().min(8, "A senha deve ter pelo menos 8 caracteres"),
-  organizationSlug: z.string().optional(),
+  password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
+  name: z.string().optional(),
+  remember: z.boolean(),
+}).superRefine((values, context) => {
+  if (values.mode !== "register") return;
+  if (!values.name || values.name.trim().length < 2) {
+    context.addIssue({ code: "custom", path: ["name"], message: "Informe seu nome" });
+  }
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
-  const { login } = useSession();
+  const { login, registerLeader } = useSession();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState("");
   const {
     register,
     handleSubmit,
+    reset,
+    control,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { mode: "login", remember: false },
+  });
+  const mode = useWatch({ control, name: "mode" });
 
   async function onSubmit(values: FormValues) {
     setServerError("");
     try {
-      await login({
-        ...values,
-        organizationSlug: values.organizationSlug || undefined,
-      });
+      if (values.mode === "register") {
+        await registerLeader({
+          name: values.name!.trim(),
+          email: values.email,
+          password: values.password,
+          remember: values.remember,
+        });
+      } else {
+        await login({
+          email: values.email,
+          password: values.password,
+          remember: values.remember,
+        });
+      }
     } catch (error) {
       setServerError(
         error instanceof Error ? error.message : "Não foi possível entrar. Tente novamente.",
@@ -57,7 +80,7 @@ export default function LoginPage() {
           </p>
           <div className="story-stat">
             <strong>Impacto é feito em equipe.</strong>
-            <span>Continue a jornada da sua organização.</span>
+            <span>Continue a jornada com a sua equipe.</span>
           </div>
         </div>
         <p className="story-footer">Feito para aproximar pessoas e propósitos.</p>
@@ -67,10 +90,16 @@ export default function LoginPage() {
           <div className="login-heading">
             <span className="mobile-brand"><HeartHandshake size={24} /> Gincana Solidária</span>
             <p className="eyebrow">Bem-vindo de volta</p>
-            <h2>Entre na sua conta</h2>
-            <p>Use os dados cadastrados pela sua organização.</p>
+            <h2>{mode === "register" ? "Primeiro acesso de líder" : "Entre na sua conta"}</h2>
+            <p>{mode === "register" ? "Crie seu acesso. Se ainda não tiver equipe, você poderá criá-la em seguida." : "Use seu e-mail e sua senha para continuar."}</p>
           </div>
           <form onSubmit={handleSubmit(onSubmit)} className="login-form" noValidate>
+            <input type="hidden" {...register("mode")} />
+            {mode === "register" ? (
+              <Field label="Seu nome" error={errors.name?.message}>
+                <Input autoComplete="name" placeholder="Como podemos chamar você?" {...register("name")} />
+              </Field>
+            ) : null}
             <Field label="E-mail" error={errors.email?.message}>
               <div className="input-with-icon">
                 <Mail size={18} />
@@ -91,16 +120,29 @@ export default function LoginPage() {
                 </button>
               </div>
             </Field>
-            <Field label="Organização (opcional)" error={errors.organizationSlug?.message} hint="Preencha somente se você participa de mais de uma organização.">
-              <Input placeholder="ex.: minha-empresa" {...register("organizationSlug")} />
-            </Field>
+            <label className="remember-option">
+              <input type="checkbox" {...register("remember")} />
+              <span>Manter conectado neste dispositivo</span>
+            </label>
             {serverError ? <div className="form-alert" role="alert">{serverError}</div> : null}
             <Button type="submit" loading={isSubmitting} className="login-submit">
-              Entrar <ArrowRight size={18} />
+              {mode === "register" ? "Criar acesso de líder" : "Entrar"} <ArrowRight size={18} />
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setServerError("");
+                reset({ mode: mode === "register" ? "login" : "register", remember: false });
+              }}
+            >
+              {mode === "register" ? <><ArrowLeft size={17} /> Voltar ao login</> : <><UserRoundCheck size={17} /> Primeiro acesso de líder</>}
             </Button>
           </form>
           <p className="login-help">
-            Problemas para entrar? Fale com a pessoa responsável pela gincana na sua organização.
+            {mode === "register"
+              ? "Somente líderes podem criar equipes. Administradores também podem cadastrar uma equipe com seu líder inicial."
+              : "Problemas para entrar? Fale com uma pessoa líder da sua equipe."}
           </p>
         </div>
       </section>

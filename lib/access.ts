@@ -2,14 +2,15 @@ import type { AppRole } from "@/lib/types";
 
 const accessRules: Array<{ prefix: string; roles: AppRole[] }> = [
   { prefix: "/admin", roles: ["SUPER_ADMIN"] },
-  { prefix: "/validations", roles: ["MANAGER", "VALIDATOR"] },
+  { prefix: "/create-team", roles: ["LEADER_SETUP"] },
+  { prefix: "/validations", roles: ["VALIDATOR"] },
   { prefix: "/members", roles: ["MANAGER"] },
   { prefix: "/campaigns", roles: ["MANAGER"] },
   { prefix: "/goals", roles: ["MANAGER"] },
-  { prefix: "/settings", roles: ["MANAGER"] },
-  { prefix: "/dashboard", roles: ["MANAGER", "VALIDATOR", "MEMBER"] },
-  { prefix: "/activities", roles: ["MANAGER", "VALIDATOR", "MEMBER"] },
-  { prefix: "/submissions", roles: ["MANAGER", "VALIDATOR", "MEMBER"] },
+  { prefix: "/settings", roles: ["MANAGER", "MEMBER"] },
+  { prefix: "/dashboard", roles: ["MANAGER", "MEMBER"] },
+  { prefix: "/activities", roles: ["MANAGER", "MEMBER"] },
+  { prefix: "/submissions", roles: ["MANAGER", "MEMBER"] },
 ];
 
 export function canAccessPath(role: AppRole, pathname: string) {

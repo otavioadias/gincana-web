@@ -10,11 +10,26 @@ import { appRole, type Principal } from "@/lib/types";
 interface SessionContextValue {
   principal: Principal | null;
   loading: boolean;
-  login: (input: { email: string; password: string; organizationSlug?: string }) => Promise<void>;
+  login: (input: { email: string; password: string; remember: boolean }) => Promise<void>;
+  registerLeader: (input: {
+    name: string;
+    email: string;
+    password: string;
+    remember: boolean;
+  }) => Promise<void>;
+  createTeam: (input: { teamName: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+function landingPath(principal: Principal) {
+  const role = appRole(principal);
+  if (role === "SUPER_ADMIN") return "/admin/organizations";
+  if (role === "VALIDATOR") return "/validations";
+  if (role === "LEADER_SETUP") return "/create-team";
+  return "/dashboard";
+}
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [principal, setPrincipal] = useState<Principal | null>(null);
@@ -51,13 +66,44 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(
-    async (input: { email: string; password: string; organizationSlug?: string }) => {
-      const tokens = await authService.login(input);
+    async (input: { email: string; password: string; remember: boolean }) => {
+      const tokens = await authService.login({
+        email: input.email,
+        password: input.password,
+      });
+      tokenStorage.write(tokens, input.remember);
+      const nextPrincipal = await authService.me();
+      queryClient.clear();
+      setPrincipal(nextPrincipal);
+      router.replace(landingPath(nextPrincipal));
+    },
+    [queryClient, router],
+  );
+
+  const registerLeader = useCallback(
+    async (input: { name: string; email: string; password: string; remember: boolean }) => {
+      const tokens = await authService.registerLeader({
+        name: input.name,
+        email: input.email,
+        password: input.password,
+      });
+      tokenStorage.write(tokens, input.remember);
+      const nextPrincipal = await authService.me();
+      queryClient.clear();
+      setPrincipal(nextPrincipal);
+      router.replace("/create-team");
+    },
+    [queryClient, router],
+  );
+
+  const createTeam = useCallback(
+    async (input: { teamName: string }) => {
+      const tokens = await authService.createTeam(input);
       tokenStorage.write(tokens);
       const nextPrincipal = await authService.me();
       queryClient.clear();
       setPrincipal(nextPrincipal);
-      router.replace(appRole(nextPrincipal) === "SUPER_ADMIN" ? "/admin/organizations" : "/dashboard");
+      router.replace("/dashboard");
     },
     [queryClient, router],
   );
@@ -82,8 +128,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [loading, pathname, principal, router]);
 
   const value = useMemo(
-    () => ({ principal, loading, login, logout }),
-    [loading, login, logout, principal],
+    () => ({ principal, loading, login, registerLeader, createTeam, logout }),
+    [createTeam, loading, login, logout, principal, registerLeader],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

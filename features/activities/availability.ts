@@ -1,30 +1,42 @@
-import type { Activity, Submission } from "@/lib/types";
+import type { Activity } from "@/lib/types";
 
-const countedStatuses = new Set([
-  "SUBMITTED",
-  "UNDER_REVIEW",
-  "APPROVED",
-  "PARTIALLY_APPROVED",
-]);
+function availabilityReason(reason: string | null, limit: number | null) {
+  if (!reason) return null;
+  if (reason === "Activity is inactive") return "Atividade pausada pela organização.";
+  if (reason.startsWith("Maximum of ")) {
+    return limit === 1
+      ? "A equipe já enviou o único registro permitido para esta atividade."
+      : `Limite de ${limit ?? "ocorrências"} registros enviados atingido.`;
+  }
+  return reason;
+}
 
-export function activityAvailability(activity: Activity, submissions: Submission[]) {
+export function activityAvailability(activity: Activity) {
+  const limit = activity.maxOccurrences ?? (activity.repeatable === false ? 1 : null);
+  const used =
+    activity.availability?.usedOccurrences ??
+    activity.availability?.approvedOccurrences ??
+    activity.approvedOccurrences ??
+    0;
+
+  if (activity.availability) {
+    return {
+      available: activity.availability.available,
+      used,
+      reason: availabilityReason(activity.availability.reason, limit),
+    };
+  }
   if (activity.status === "INACTIVE") {
-    return { available: false, used: 0, reason: "Atividade pausada pela organização." };
+    return { available: false, used, reason: "Atividade pausada pela organização." };
   }
-  const used = submissions.filter(
-    (submission) =>
-      submission.activityId === activity.id &&
-      submission.status &&
-      countedStatuses.has(submission.status),
-  ).length;
-  if (!activity.repeatable && used > 0) {
-    return { available: false, used, reason: "Esta atividade pode ser registrada somente uma vez." };
-  }
-  if (activity.maxOccurrences && used >= activity.maxOccurrences) {
+  if (limit !== null && used >= limit) {
     return {
       available: false,
       used,
-      reason: `Limite de ${activity.maxOccurrences} registro${activity.maxOccurrences > 1 ? "s" : ""} atingido.`,
+      reason:
+        limit === 1
+          ? "A equipe já enviou o único registro permitido para esta atividade."
+          : `Limite de ${limit} registros enviados atingido.`,
     };
   }
   return { available: true, used, reason: null };

@@ -22,6 +22,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui";
+import { useTeamBrand } from "@/components/team-brand-provider";
 import { LoadingState, PermissionState } from "@/components/states";
 import { useSession } from "@/features/auth/session-provider";
 import { appRole, type AppRole } from "@/lib/types";
@@ -36,15 +37,16 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard, roles: ["MANAGER", "VALIDATOR", "MEMBER"] },
-  { href: "/activities", label: "Atividades", icon: Activity, roles: ["MANAGER", "MEMBER", "VALIDATOR"] },
-  { href: "/submissions", label: "Minhas ações", icon: Send, roles: ["MEMBER", "MANAGER", "VALIDATOR"] },
-  { href: "/validations", label: "Validações", icon: ClipboardCheck, roles: ["MANAGER", "VALIDATOR"] },
+  { href: "/create-team", label: "Criar equipe", icon: Building2, roles: ["LEADER_SETUP"] },
+  { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard, roles: ["MANAGER", "MEMBER"] },
+  { href: "/activities", label: "Atividades", icon: Activity, roles: ["MANAGER", "MEMBER"] },
+  { href: "/submissions", label: "Ações da equipe", icon: Send, roles: ["MEMBER", "MANAGER"] },
+  { href: "/validations", label: "Validações", icon: ClipboardCheck, roles: ["VALIDATOR"] },
   { href: "/members", label: "Equipe", icon: Users, roles: ["MANAGER"] },
   { href: "/campaigns", label: "Campanhas", icon: Flag, roles: ["MANAGER"] },
   { href: "/goals", label: "Metas", icon: Target, roles: ["MANAGER"] },
-  { href: "/settings", label: "Identidade", icon: Settings, roles: ["MANAGER"] },
-  { href: "/admin/organizations", label: "Organizações", icon: Building2, roles: ["SUPER_ADMIN"] },
+  { href: "/settings", label: "Identidade", icon: Settings, roles: ["MANAGER", "MEMBER"] },
+  { href: "/admin/organizations", label: "Equipes", icon: Building2, roles: ["SUPER_ADMIN"] },
   { href: "/admin/metrics", label: "Saúde da plataforma", icon: BarChart3, roles: ["SUPER_ADMIN"] },
 ];
 
@@ -52,8 +54,9 @@ function roleLabel(role: AppRole | null) {
   return (
     {
       SUPER_ADMIN: "Super admin",
-      MANAGER: "Gestão",
-      VALIDATOR: "Validação",
+      VALIDATOR: "Validador da plataforma",
+      LEADER_SETUP: "Líder sem equipe",
+      MANAGER: "Líder da equipe",
       MEMBER: "Participante",
     } as Record<string, string>
   )[role ?? ""] ?? "Conta";
@@ -64,6 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const brand = useTeamBrand();
   const role = appRole(principal);
   const items = useMemo(() => navItems.filter((item) => role && item.roles.includes(role)), [role]);
   const allowed = role ? canAccessPath(role, pathname) : false;
@@ -75,10 +79,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className={cn("app-shell", collapsed && "sidebar-collapsed")}>
       <aside className={cn("sidebar", open && "sidebar-open")}>
         <div className="brand">
-          <span className="brand-mark"><HeartHandshake /></span>
+          <span className="brand-mark">
+            {brand.logoUrl ? (
+              // A URL é assinada e temporária; não passa pelo cache/otimizador do Next.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={brand.logoUrl} alt="" />
+            ) : (
+              <HeartHandshake />
+            )}
+          </span>
           <div className="brand-copy">
-            <strong>Gincana</strong>
-            <span>Solidária</span>
+            <strong>{brand.name ?? "Gincana"}</strong>
+            <span>{brand.name ? "Gincana Solidária" : "Solidária"}</span>
           </div>
           <button className="icon-button mobile-only" onClick={() => setOpen(false)} aria-label="Fechar menu">
             <X size={20} />
@@ -112,7 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="topbar-context">
             <span className="pulse-dot" />
-            <span>{role === "SUPER_ADMIN" ? "Plataforma" : "Organização conectada"}</span>
+            <span>{role === "SUPER_ADMIN" || role === "VALIDATOR" ? "Plataforma" : role === "LEADER_SETUP" ? "Primeiro acesso" : brand.name ?? "Equipe conectada"}</span>
           </div>
           <div className="profile-menu">
             <span className="avatar">{initials(principal.email)}</span>

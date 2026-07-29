@@ -36,6 +36,11 @@ Todas as chaves do TanStack Query incluem `organizationId`, e login/logout limpa
 - Não existe endpoint de alteração de senha.
 - Não existe endpoint de configurações da organização acessível a `MANAGER`, nem upload de logo. A tela de identidade oferece prévia segura e mantém o salvamento desabilitado.
 - O upload documentado usa `multipart/form-data`, campo `file`, até 10 MB por arquivo. O controller aceita JPG, PNG, WebP e PDF.
+- Não existem `/team-settings`, `/activities/{id}/availability`, `/goals/{id}/progress` ou `/goals/monthly-plan`. O frontend usa a disponibilidade embutida em `GET /activities` e não simula os demais contratos.
+- `Activity` suporta apenas limite total (`maxOccurrences`), quantidade mínima e percentual mínimo. Limites mensais, individuais, `minimumParticipants` e `blockedUntil` não constam no contrato.
+- `Goal` aceita apenas `WEEKLY` e `MONTHLY`, datas, pontos e ações. Título, descrição, metas de participantes/quantidade, status e progresso não estão documentados.
+- `CreateSubmissionDto` não possui `details`, portanto `durationMinutes` não pode ser enviado. Também não há contrato estruturado para a composição de kits ou cálculo mínimo de cartas.
+- O dashboard não retorna `disqualified` nem o motivo/data de desbloqueio de atividades; a interface não infere esses dados.
 
 ## Docker
 

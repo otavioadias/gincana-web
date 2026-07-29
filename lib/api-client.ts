@@ -14,6 +14,50 @@ export class ApiError extends Error {
   }
 }
 
+export function isPermissionError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.status === 403;
+}
+
+function translateBackendMessage(message: string) {
+  const known: Record<string, string> = {
+    "Insufficient role for this operation": "Seu perfil não tem permissão para realizar esta operação.",
+    "One or more participants do not belong to the organization": "Um ou mais participantes não pertencem à organização ou estão inativos.",
+    "Campaign and activity must belong to the authenticated organization": "A campanha e a atividade selecionadas não são compatíveis.",
+    "Action date is outside the campaign period": "A data da ação está fora do período da campanha.",
+    "At least one evidence file is required": "Adicione pelo menos uma evidência antes de enviar para validação.",
+    "Activity is inactive": "Esta atividade está pausada pela organização.",
+    "Only the author can edit this submission": "Somente quem criou o registro pode editá-lo.",
+    "Only the author can submit": "Somente quem criou o registro pode enviá-lo para validação.",
+    "Submission is not editable": "Este registro não pode mais ser editado.",
+    "This evidence was already linked to a submission": "Esta evidência já foi utilizada em outro registro.",
+  };
+  if (known[message]) return known[message];
+  if (message.startsWith("Minimum quantity is ")) {
+    return `A quantidade mínima é ${message.slice("Minimum quantity is ".length)}.`;
+  }
+  if (message.startsWith("Minimum participation is ")) {
+    return `A participação mínima exigida é ${message.slice("Minimum participation is ".length)}.`;
+  }
+  if (message.startsWith("Maximum of ")) {
+    const limit = message.match(/\d+/)?.[0];
+    return limit === "1"
+      ? "A equipe já enviou o único registro permitido para esta atividade."
+      : `A equipe já atingiu o limite de ${limit ?? "registros enviados"}.`;
+  }
+  return message;
+}
+
+export function translateApiError(error: unknown, fallback = "Não foi possível concluir a solicitação") {
+  if (error instanceof ApiError) {
+    if (error.status === 403) return translateBackendMessage(error.message) || "Você não tem permissão para realizar esta operação.";
+    if (error.status === 401) return "Sua sessão expirou. Faça login novamente.";
+    if (error.status === 409) return translateBackendMessage(error.message) || "Este conteúdo já foi registrado.";
+    return error.message ? translateBackendMessage(error.message) : fallback;
+  }
+  if (error instanceof Error) return error.message ? translateBackendMessage(error.message) : fallback;
+  return fallback;
+}
+
 function errorMessage(body: unknown, fallback: string) {
   if (typeof body === "object" && body && "message" in body) {
     const message = (body as { message?: unknown }).message;

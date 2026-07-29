@@ -9,9 +9,8 @@ import { toast } from "sonner";
 import { Button, Card, Field, Input, PageHeading, Select } from "@/components/ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { StatusBadge } from "@/components/status-badge";
-import { useSession } from "@/features/auth/session-provider";
 import { validationSchema, type ValidationValues } from "@/features/validations/validation-schema";
-import { submissionService } from "@/lib/services";
+import { validationService } from "@/lib/services";
 import { queryKeys } from "@/lib/query-keys";
 import type { Submission } from "@/lib/types";
 import { formatDate, formatNumber } from "@/lib/utils";
@@ -20,14 +19,12 @@ import { z } from "zod";
 type ValidationInput = z.input<typeof validationSchema>;
 
 export function ValidationsPage() {
-  const { principal } = useSession();
   const queryClient = useQueryClient();
-  const tenant = principal?.organizationId ?? null;
   const [status, setStatus] = useState("SUBMITTED");
   const [selected, setSelected] = useState<Submission | null>(null);
   const submissions = useQuery({
-    queryKey: queryKeys.tenant(tenant, "validation-queue", status),
-    queryFn: () => submissionService.list(status || undefined),
+    queryKey: queryKeys.tenant(null, "platform-validation-queue", status),
+    queryFn: () => validationService.list(status || undefined),
   });
   const form = useForm<ValidationInput, unknown, ValidationValues>({
     resolver: zodResolver(validationSchema),
@@ -35,12 +32,12 @@ export function ValidationsPage() {
   });
   const decision = useWatch({ control: form.control, name: "status" });
   const validate = useMutation({
-    mutationFn: (values: ValidationValues) => submissionService.validate(selected!.id, values),
+    mutationFn: (values: ValidationValues) => validationService.validate(selected!.id, values),
     onSuccess: async () => {
       toast.success("Validação registrada");
       setSelected(null);
       form.reset({ status: "APPROVED" });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "validation-queue", status) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tenant(null, "platform-validation-queue", status) });
     },
     onError: (error) => toast.error(error.message),
   });
@@ -49,7 +46,7 @@ export function ValidationsPage() {
 
   async function openEvidence(submissionId: string, evidenceId: string) {
     try {
-      const { url } = await submissionService.evidenceUrl(submissionId, evidenceId);
+      const { url } = await validationService.evidenceUrl(submissionId, evidenceId);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível abrir a evidência");
@@ -58,7 +55,7 @@ export function ValidationsPage() {
 
   return (
     <>
-      <PageHeading eyebrow="Cuidado e transparência" title="Fila de validação" description="Analise cada ação com contexto e ofereça retornos claros para a equipe." />
+      <PageHeading eyebrow="Validação da plataforma" title="Fila de todas as equipes" description="Analise ações enviadas por diferentes equipes sem pertencer a nenhuma delas." />
       <section className="validation-metrics">
         <Card><span className="metric-icon metric-amber"><Clock3 /></span><div><strong>{(submissions.data ?? []).length}</strong><span>na visualização atual</span></div></Card>
         <Card><span className="metric-icon metric-green"><CheckCircle2 /></span><div><strong>Feedback</strong><span>sempre com contexto</span></div></Card>
@@ -80,7 +77,7 @@ export function ValidationsPage() {
           <div className="queue-header"><span>Ação</span><span>Data</span><span>Estimativa</span><span>Status</span><span /></div>
           {(submissions.data ?? []).map((item) => (
             <button key={item.id} className="queue-row" onClick={() => setSelected(item)}>
-              <div><span className="activity-symbol"><FileText size={17} /></span><div><strong>{item.activity?.name ?? "Ação solidária"}</strong><span>{item.institutionName ?? "Instituição não informada"}</span></div></div>
+              <div><span className="activity-symbol"><FileText size={17} /></span><div><strong>{item.activity?.name ?? "Ação solidária"}</strong><span>{item.organization?.name ?? "Equipe não identificada"} · {item.institutionName ?? "Instituição não informada"}</span></div></div>
               <span>{formatDate(item.actionDate)}</span>
               <strong>{formatNumber(item.calculatedPoints)} pts</strong>
               <StatusBadge status={item.status} />
@@ -93,7 +90,7 @@ export function ValidationsPage() {
       {selected ? (
         <div className="drawer-backdrop" onMouseDown={() => setSelected(null)}>
           <aside className="validation-drawer" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="drawer-head"><div><p className="eyebrow">Análise</p><h2>{selected.activity?.name ?? "Ação solidária"}</h2></div><button className="icon-button" onClick={() => setSelected(null)} aria-label="Fechar"><X /></button></div>
+            <div className="drawer-head"><div><p className="eyebrow">{selected.organization?.name ?? "Equipe"}</p><h2>{selected.activity?.name ?? "Ação solidária"}</h2></div><button className="icon-button" onClick={() => setSelected(null)} aria-label="Fechar"><X /></button></div>
             <div className="drawer-body">
               <div className="drawer-facts"><div><span>Data</span><strong>{formatDate(selected.actionDate)}</strong></div><div><span>Instituição</span><strong>{selected.institutionName ?? "—"}</strong></div><div><span>Estimativa</span><strong>{formatNumber(selected.calculatedPoints)} pts</strong></div></div>
               {selected.notes ? <div className="notes-box"><div><strong>Observações</strong><p>{selected.notes}</p></div></div> : null}

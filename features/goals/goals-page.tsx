@@ -1,31 +1,150 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Target } from "lucide-react";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { CalendarClock, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
-import { GoalProgress } from "@/components/goal-progress";
-import { Button, Card, Field, Input, PageHeading } from "@/components/ui";
+import { ConfirmDialog } from "@/components/feedback";
+import {
+  GoalCard,
+  GoalForm,
+  MonthlyPlanForm,
+  type GoalFormValues,
+} from "@/components/goals";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { Button, Card, PageHeading, Select } from "@/components/ui";
 import { useSession } from "@/features/auth/session-provider";
 import { campaignService, goalService } from "@/lib/services";
 import { queryKeys } from "@/lib/query-keys";
-import { formatDate } from "@/lib/utils";
+import type { Goal } from "@/lib/types";
+import { translateApiError } from "@/lib/api-client";
 
-const schema = z.object({ campaignId: z.string().min(1), type: z.enum(["WEEKLY", "MONTHLY"]), startsAt: z.string().min(1), endsAt: z.string().min(1), targetPoints: z.coerce.number().min(0), targetActions: z.coerce.number().min(0) });
-type Values = z.infer<typeof schema>;
-type InputValues = z.input<typeof schema>;
 export function GoalsPage() {
-  const { principal } = useSession(); const queryClient = useQueryClient(); const tenant = principal?.organizationId ?? null; const [showForm, setShowForm] = useState(false);
-  const goals = useQuery({ queryKey: queryKeys.tenant(tenant, "goals"), queryFn: goalService.list }); const campaigns = useQuery({ queryKey: queryKeys.tenant(tenant, "campaigns"), queryFn: campaignService.list });
-  const form = useForm<InputValues, unknown, Values>({ resolver: zodResolver(schema), defaultValues: { type: "WEEKLY", targetPoints: 0, targetActions: 0 } });
-  const create = useMutation({ mutationFn: goalService.create, onSuccess: async () => { toast.success("Meta criada"); form.reset({ type: "WEEKLY", targetPoints: 0, targetActions: 0 }); setShowForm(false); await queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "goals") }); }, onError: (error) => toast.error(error.message) });
-  if (goals.isLoading || campaigns.isLoading) return <LoadingState />; if (goals.error || campaigns.error) return <ErrorState error={goals.error ?? campaigns.error} />;
-  return <><PageHeading eyebrow="Direção compartilhada" title="Metas" description="Defina marcos semanais e mensais para orientar — nunca cobrar — a mobilização." action={<Button onClick={() => setShowForm((value) => !value)}><Plus size={17} /> Nova meta</Button>} />
-    {showForm ? <Card className="inline-form-card"><form className="form-grid" onSubmit={form.handleSubmit((values) => create.mutate(values))}><Field label="Campanha"><select className="input" {...form.register("campaignId")}><option value="">Selecione</option>{campaigns.data!.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Período"><select className="input" {...form.register("type")}><option value="WEEKLY">Semanal</option><option value="MONTHLY">Mensal</option></select></Field><Field label="Início"><Input type="date" {...form.register("startsAt")} /></Field><Field label="Fim"><Input type="date" {...form.register("endsAt")} /></Field><Field label="Pontos desejados"><Input type="number" min="0" {...form.register("targetPoints")} /></Field><Field label="Ações desejadas"><Input type="number" min="0" {...form.register("targetActions")} /></Field><div className="form-actions"><Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Cancelar</Button><Button loading={create.isPending}>Criar meta</Button></div></form></Card> : null}
-    {(goals.data ?? []).length ? <div className="goal-management-grid">{goals.data!.map((item) => <Card key={item.id} className="managed-goal"><span className="metric-icon metric-green"><Target /></span><div><span className="soft-label">{item.type === "WEEKLY" ? "Semanal" : "Mensal"}</span><h3>{formatDate(item.startsAt)} — {formatDate(item.endsAt)}</h3><GoalProgress label="Pontos planejados" current={0} target={item.targetPoints ?? 0} /><GoalProgress label="Ações planejadas" current={0} target={item.targetActions ?? 0} kind="ações" /></div></Card>)}</div> : <EmptyState title="Ainda não há metas" description="Crie um marco acolhedor para orientar o próximo ciclo da equipe." />}
-  </>;
+  const { principal } = useSession();
+  const queryClient = useQueryClient();
+  const tenant = principal?.organizationId ?? null;
+  const [showForm, setShowForm] = useState(false);
+  const [showPlan, setShowPlan] = useState(false);
+  const [campaignId, setCampaignId] = useState("");
+  const [type, setType] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
+
+  const goals = useQuery({
+    queryKey: queryKeys.tenant(tenant, "goals"),
+    queryFn: goalService.list,
+  });
+  const campaigns = useQuery({
+    queryKey: queryKeys.tenant(tenant, "campaigns"),
+    queryFn: campaignService.list,
+  });
+  const create = useMutation({
+    mutationFn: (values: GoalFormValues) => goalService.create(values),
+    onSuccess: async () => {
+      toast.success("Meta criada");
+      setShowForm(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "goals") });
+    },
+    onError: (error) => toast.error(translateApiError(error, "Não foi possível criar a meta")),
+  });
+  const remove = useMutation({
+    mutationFn: goalService.remove,
+    onSuccess: async () => {
+      toast.success("Meta excluída");
+      setPendingDelete(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tenant(tenant, "goals") });
+    },
+    onError: (error) => toast.error(translateApiError(error, "Não foi possível excluir a meta")),
+  });
+
+  const filtered = useMemo(
+    () =>
+      (goals.data ?? []).filter(
+        (goal) =>
+          (!campaignId || goal.campaignId === campaignId) &&
+          (!type || goal.type === type),
+      ),
+    [campaignId, goals.data, type],
+  );
+
+  if (goals.isLoading || campaigns.isLoading) return <LoadingState />;
+  if (goals.error || campaigns.error) {
+    return (
+      <ErrorState
+        error={goals.error ?? campaigns.error}
+        retry={() => void Promise.all([goals.refetch(), campaigns.refetch()])}
+      />
+    );
+  }
+
+  return (
+    <>
+      <PageHeading
+        eyebrow="Direção compartilhada"
+        title="Metas da equipe"
+        description="Defina marcos semanais e mensais e acompanhe o avanço pelo dashboard."
+        action={
+          <div className="heading-filters">
+            <Button variant="secondary" onClick={() => setShowPlan((value) => !value)}>
+              <CalendarClock size={17} /> Plano mensal
+            </Button>
+            <Button onClick={() => setShowForm((value) => !value)}>
+              <Plus size={17} /> Nova meta
+            </Button>
+          </div>
+        }
+      />
+
+      {showPlan ? <Card className="inline-form-card"><MonthlyPlanForm /></Card> : null}
+      {showForm ? (
+        <Card className="inline-form-card">
+          <div className="card-heading">
+            <div><p className="eyebrow">Planejamento</p><h3>Nova meta</h3></div>
+          </div>
+          <GoalForm
+            campaigns={campaigns.data ?? []}
+            loading={create.isPending}
+            onCancel={() => setShowForm(false)}
+            onSubmit={(values) => create.mutate(values)}
+          />
+        </Card>
+      ) : null}
+
+      <Card className="filter-bar">
+        <Select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} aria-label="Filtrar campanha">
+          <option value="">Todas as campanhas</option>
+          {(campaigns.data ?? []).map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+        </Select>
+        <Select value={type} onChange={(event) => setType(event.target.value)} aria-label="Filtrar período">
+          <option value="">Todos os períodos</option>
+          <option value="WEEKLY">Semanais</option>
+          <option value="MONTHLY">Mensais</option>
+        </Select>
+      </Card>
+
+      {filtered.length ? (
+        <div className="goal-management-grid">
+          {filtered.map((goal) => (
+            <GoalCard key={goal.id} goal={goal} onDelete={() => setPendingDelete(goal)} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="Nenhuma meta encontrada"
+          description="Crie uma meta ou ajuste os filtros para visualizar outro período."
+          action={<Button onClick={() => setShowForm(true)}>Criar primeira meta</Button>}
+        />
+      )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Excluir esta meta?"
+        description="Essa ação remove a meta da equipe e não pode ser desfeita."
+        confirmLabel="Excluir meta"
+        destructive
+        loading={remove.isPending}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
+      />
+    </>
+  );
 }

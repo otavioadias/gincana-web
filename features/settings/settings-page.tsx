@@ -1,33 +1,84 @@
 "use client";
 
-import { ImageUp, Info, Palette, Save } from "lucide-react";
+import { Info, Palette, Save } from "lucide-react";
 import { useState } from "react";
+import { ColorPickerField, TeamLogoUploader } from "@/components/team-settings-fields";
+import { HEX_COLOR, teamBrandVariables } from "@/components/team-brand-provider";
 import { Button, Card, Field, Input, PageHeading } from "@/components/ui";
 import { useSession } from "@/features/auth/session-provider";
+import { appRole } from "@/lib/types";
 
-const safeHex = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 export function SettingsPage() {
   const { principal } = useSession();
-  const [name, setName] = useState("Minha organização");
-  const [primary, setPrimary] = useState("#0d7555");
-  const [secondary, setSecondary] = useState("#e9a62b");
-  const safePrimary = safeHex.test(primary) ? primary : "#0d7555";
-  const safeSecondary = safeHex.test(secondary) ? secondary : "#e9a62b";
-  return <>
-    <PageHeading eyebrow="Identidade visual" title="Configurações da organização" description="Pré-visualize cores e marca em um ambiente seguro." />
-    <div className="settings-grid">
-      <Card className="settings-form"><div className="card-heading"><div><p className="eyebrow">Marca</p><h3>Informações e cores</h3></div></div>
-        <div className="contract-notice"><Info size={17} /><p>A API atual não oferece uma rota de configuração para MANAGER e o retorno de <code>/me</code> não inclui marca ou cores. A prévia abaixo não é enviada para evitar um contrato incompatível.</p></div>
-        <Field label="Nome da organização"><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
-        <div className="color-fields"><Field label="Cor principal"><div className="color-input"><input type="color" value={safePrimary} onChange={(event) => setPrimary(event.target.value)} /><Input value={primary} onChange={(event) => setPrimary(event.target.value)} /></div></Field><Field label="Cor secundária"><div className="color-input"><input type="color" value={safeSecondary} onChange={(event) => setSecondary(event.target.value)} /><Input value={secondary} onChange={(event) => setSecondary(event.target.value)} /></div></Field></div>
-        <div className="logo-drop"><ImageUp /><strong>Logo da organização</strong><span>O upload será habilitado quando o gincana-api publicar a rota correspondente.</span></div>
-        <Button disabled><Save size={17} /> Salvar identidade</Button>
-      </Card>
-      <Card className="theme-preview" style={{ "--preview-primary": safePrimary, "--preview-secondary": safeSecondary } as React.CSSProperties}>
-        <div className="preview-label"><Palette size={15} /> Pré-visualização segura</div>
-        <div className="preview-header"><span className="preview-logo">{name.slice(0, 1).toUpperCase()}</span><strong>{name}</strong></div>
-        <div className="preview-body"><p>Olá, {principal?.email.split("@")[0]}!</p><h3>Juntos, já transformamos muito.</h3><div className="preview-impact"><span>Impacto aprovado</span><strong>1.280 pontos</strong><i /></div><button>Registrar uma ação</button></div>
-      </Card>
-    </div>
-  </>;
+  const role = appRole(principal);
+  const canEdit = role === "MANAGER";
+  const [name, setName] = useState("Minha equipe");
+  const [primary, setPrimary] = useState("#0D7555");
+  const [secondary, setSecondary] = useState("#E9A62B");
+  const validColors = HEX_COLOR.test(primary) && HEX_COLOR.test(secondary);
+  const previewVariables = {
+    ...teamBrandVariables({ primaryColor: primary, secondaryColor: secondary }),
+    "--preview-primary": validColors ? primary : "#0D7555",
+    "--preview-secondary": validColors ? secondary : "#E9A62B",
+  } as React.CSSProperties;
+
+  return (
+    <>
+      <PageHeading
+        eyebrow="Identidade visual"
+        title="Configurações da equipe"
+        description={
+          canEdit
+            ? "Prepare a identidade da equipe e visualize o resultado em tempo real."
+            : "Consulte a identidade visual da sua equipe."
+        }
+      />
+      <div className="settings-grid">
+        <Card className="settings-form">
+          <div className="card-heading">
+            <div><p className="eyebrow">Marca</p><h3>Informações e cores</h3></div>
+          </div>
+          <div className="contract-notice" role="note">
+            <Info size={17} />
+            <p>
+              O OpenAPI atual não publica <code>/team-settings</code> nem retorna marca em <code>/me</code>.
+              A edição abaixo é somente uma prévia e não é persistida para evitar uma integração incompatível.
+            </p>
+          </div>
+          <Field label="Nome da equipe">
+            <Input value={name} disabled={!canEdit} onChange={(event) => setName(event.target.value)} />
+          </Field>
+          <div className="color-fields">
+            <ColorPickerField label="Cor primária" value={primary} disabled={!canEdit} onChange={setPrimary} />
+            <ColorPickerField label="Cor secundária" value={secondary} disabled={!canEdit} onChange={setSecondary} />
+          </div>
+          <TeamLogoUploader disabled />
+          <Button disabled>
+            <Save size={17} /> Salvar identidade
+          </Button>
+          <p className="contract-footnote">
+            O botão permanece desabilitado até os endpoints oficiais de tema e logo estarem documentados.
+          </p>
+        </Card>
+
+        <Card className="theme-preview" style={previewVariables}>
+          <div className="preview-label"><Palette size={15} /> Pré-visualização em tempo real</div>
+          <div className="preview-header">
+            <span className="preview-logo">{name.trim().slice(0, 1).toUpperCase() || "E"}</span>
+            <strong>{name || "Equipe"}</strong>
+          </div>
+          <div className="preview-body">
+            <p>Olá, {principal?.email.split("@")[0]}!</p>
+            <h3>Juntos, já transformamos muito.</h3>
+            <div className="preview-impact">
+              <span>Impacto aprovado</span>
+              <strong>1.280 pontos</strong>
+              <i />
+            </div>
+            <button type="button">Registrar uma ação</button>
+          </div>
+        </Card>
+      </div>
+    </>
+  );
 }

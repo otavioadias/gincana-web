@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { Toaster } from "sonner";
+import { TeamBrandProvider } from "@/components/team-brand-provider";
 import { SessionProvider } from "@/features/auth/session-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -18,7 +19,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionProvider>{children}</SessionProvider>
+      <SessionProvider>
+        <TeamBrandProvider>{children}</TeamBrandProvider>
+      </SessionProvider>
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );

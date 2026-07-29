@@ -46,7 +46,7 @@ export function ErrorState({
         <AlertCircle />
       </span>
       <h3>Algo não saiu como esperado</h3>
-      <p>{error instanceof Error ? error.message : "Tente novamente em alguns instantes."}</p>
+      <p>{error instanceof Error ? error.message : typeof error === "string" ? error : "Tente novamente em alguns instantes."}</p>
       {retry ? (
         <Button variant="secondary" onClick={retry}>
           Tentar novamente

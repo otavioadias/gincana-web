@@ -46,6 +46,73 @@
         ]
       }
     },
+    "/auth/register-leader": {
+      "post": {
+        "operationId": "AuthController_registerLeader",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterLeaderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/teams": {
+      "post": {
+        "operationId": "AuthController_createTeam",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOwnTeamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/refresh": {
       "post": {
         "operationId": "AuthController_refresh",
@@ -296,6 +363,35 @@
         ],
         "tags": [
           "admin-organizations"
+        ]
+      }
+    },
+    "/members/participants": {
+      "get": {
+        "operationId": "MembersController_findParticipants",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Membership"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "members"
         ]
       }
     },
@@ -1020,9 +1116,82 @@
         ]
       }
     },
-    "/submissions/{id}/validate": {
+    "/validation/submissions": {
+      "get": {
+        "operationId": "PlatformValidationsController_findAll",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Submission"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "platform-validations"
+        ]
+      }
+    },
+    "/validation/submissions/{id}": {
+      "get": {
+        "operationId": "PlatformValidationsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Submission"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "platform-validations"
+        ]
+      }
+    },
+    "/validation/submissions/{id}/validate": {
       "post": {
-        "operationId": "SubmissionsController_validate",
+        "operationId": "PlatformValidationsController_validate",
         "parameters": [
           {
             "name": "id",
@@ -1061,7 +1230,43 @@
           }
         ],
         "tags": [
-          "submissions"
+          "platform-validations"
+        ]
+      }
+    },
+    "/validation/submissions/{id}/evidences/{evidenceId}/url": {
+      "get": {
+        "operationId": "PlatformValidationsController_evidenceUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "platform-validations"
         ]
       }
     },
@@ -1440,13 +1645,9 @@
           },
           "password": {
             "type": "string",
-            "minLength": 8,
+            "minLength": 6,
             "maxLength": 128,
             "example": "ChangeMe123!"
-          },
-          "organizationSlug": {
-            "type": "string",
-            "description": "Only needed if a user belongs to multiple tenants."
           },
           "deviceInfo": {
             "type": "string",
@@ -1456,6 +1657,54 @@
         "required": [
           "email",
           "password"
+        ]
+      },
+      "RegisterLeaderDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160,
+            "example": "Ana Silva"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "ana@exemplo.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 128
+          },
+          "deviceInfo": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password"
+        ]
+      },
+      "CreateOwnTeamDto": {
+        "type": "object",
+        "properties": {
+          "teamName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 160,
+            "example": "Equipe Esperança"
+          },
+          "deviceInfo": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "teamName"
         ]
       },
       "RefreshDto": {
@@ -1512,7 +1761,7 @@
           },
           "managerTemporaryPassword": {
             "type": "string",
-            "minLength": 12,
+            "minLength": 6,
             "maxLength": 128
           },
           "primaryColor": {
@@ -1554,7 +1803,7 @@
           },
           "managerTemporaryPassword": {
             "type": "string",
-            "minLength": 12,
+            "minLength": 6,
             "maxLength": 128
           },
           "primaryColor": {
@@ -1593,14 +1842,13 @@
           "role": {
             "enum": [
               "MANAGER",
-              "VALIDATOR",
               "MEMBER"
             ],
             "type": "string"
           },
           "temporaryPassword": {
             "type": "string",
-            "minLength": 12,
+            "minLength": 6,
             "maxLength": 128
           }
         },
@@ -1625,14 +1873,13 @@
           "role": {
             "enum": [
               "MANAGER",
-              "VALIDATOR",
               "MEMBER"
             ],
             "type": "string"
           },
           "temporaryPassword": {
             "type": "string",
-            "minLength": 12,
+            "minLength": 6,
             "maxLength": 128
           },
           "status": {

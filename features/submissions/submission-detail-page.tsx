@@ -42,7 +42,7 @@ export function SubmissionDetailPage({ id }: { id: string }) {
 
   return (
     <>
-      <Link href="/submissions" className="back-link"><ArrowLeft size={16} /> Voltar para minhas ações</Link>
+      <Link href="/submissions" className="back-link"><ArrowLeft size={16} /> Voltar para ações da equipe</Link>
       <PageHeading eyebrow="Detalhes da ação" title={item.activity?.name ?? "Ação solidária"} description={`Registrada em ${formatDate(item.actionDate)}`} action={<StatusBadge status={item.status} />} />
       <div className="detail-grid">
         <div className="detail-main">
@@ -61,7 +61,7 @@ export function SubmissionDetailPage({ id }: { id: string }) {
           </Card>
         </div>
         <aside className="detail-side">
-          <Card className="points-card"><span>Pontuação estimada</span><strong>{formatNumber(item.calculatedPoints)}</strong><small>Oficial aprovada: {formatNumber(item.approvedPoints)} pontos</small></Card>
+          <Card className="points-card"><span>Andamento deste registro</span><strong>{formatNumber(item.status === "APPROVED" || item.status === "PARTIALLY_APPROVED" ? item.approvedPoints : item.calculatedPoints)}</strong><small>{item.status === "APPROVED" || item.status === "PARTIALLY_APPROVED" ? "Pontuação aprovada" : `Estimativa pendente · ${formatNumber(item.approvedPoints)} aprovada até agora`}</small></Card>
           <Card className="timeline-card">
             <p className="eyebrow">Linha do tempo</p>
             <div className="timeline">
