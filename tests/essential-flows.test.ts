@@ -24,7 +24,7 @@ import { validationSchema } from "@/features/validations/validation-schema";
 import { teamBrandVariables } from "@/components/team-brand-provider";
 import { calculateLogoDimensions } from "@/components/team-settings-fields";
 import { profileDisplayName } from "@/components/app-shell";
-import type { Activity } from "@/lib/types";
+import { appRole, type Activity } from "@/lib/types";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -117,6 +117,17 @@ describe("fluxos essenciais", () => {
     expect(canAccessPath("SUPER_ADMIN", "/admin/organizations")).toBe(true);
     expect(canAccessPath("SUPER_ADMIN", "/dashboard")).toBe(false);
     expect(canAccessPath("MEMBER", "/settings")).toBe(true);
+  });
+
+  it("mapeia o papel ADMIN do backend para a área administrativa", () => {
+    expect(appRole({
+      userId: "admin-1",
+      email: "admin@gincana.local",
+      platformRole: "ADMIN",
+      organizationId: null,
+      membershipId: null,
+      membershipRole: null,
+    })).toBe("SUPER_ADMIN");
   });
 
   it("usa a disponibilidade calculada pela API como fonte oficial", () => {
@@ -396,6 +407,20 @@ describe("fluxos essenciais", () => {
       },
       [{ id: "member-1", name: "Maria da Silva" }],
     )).toBe("Maria da Silva");
+  });
+
+  it("identifica o administrador sem exibir o e-mail no perfil", () => {
+    expect(profileDisplayName(
+      {
+        userId: "admin-1",
+        email: "admin@gincana.local",
+        platformRole: "ADMIN",
+        organizationId: null,
+        membershipId: null,
+        membershipRole: null,
+      },
+      undefined,
+    )).toBe("Administrador");
   });
 
   it("exige pontos e justificativa na aprovação parcial", () => {

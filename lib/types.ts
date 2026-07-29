@@ -1,4 +1,4 @@
-export type PlatformRole = "SUPER_ADMIN" | "VALIDATOR" | "LEADER" | "USER";
+export type PlatformRole = "ADMIN" | "USER";
 export type MembershipRole = "MANAGER" | "MEMBER";
 export type AppRole = "SUPER_ADMIN" | "VALIDATOR" | "LEADER_SETUP" | MembershipRole;
 export type EntityStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED";
@@ -234,10 +234,7 @@ export interface ActivitySummary {
 
 export function appRole(principal: Principal | null): AppRole | null {
   if (!principal) return null;
-  if (principal.platformRole === "SUPER_ADMIN") return "SUPER_ADMIN";
-  if (principal.platformRole === "VALIDATOR") return "VALIDATOR";
-  if (principal.platformRole === "LEADER" && !principal.membershipRole) {
-    return "LEADER_SETUP";
-  }
+  if (principal.platformRole === "ADMIN") return "SUPER_ADMIN";
+  if (!principal.membershipRole) return "LEADER_SETUP";
   return principal.membershipRole;
 }

@@ -74,6 +74,7 @@ export function profileDisplayName(
   return principal.name?.trim()
     || membership?.user?.name?.trim()
     || membership?.name?.trim()
+    || (principal.platformRole === "ADMIN" ? "Administrador" : "")
     || principal.email.split("@")[0];
 }
 
