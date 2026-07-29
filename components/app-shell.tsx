@@ -18,6 +18,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -28,6 +29,9 @@ import { useSession } from "@/features/auth/session-provider";
 import { appRole, type AppRole } from "@/lib/types";
 import { cn, initials } from "@/lib/utils";
 import { canAccessPath } from "@/lib/access";
+import { queryKeys } from "@/lib/query-keys";
+import { memberService } from "@/lib/services";
+import type { Membership, Principal } from "@/lib/types";
 
 interface NavItem {
   href: string;
@@ -62,6 +66,17 @@ function roleLabel(role: AppRole | null) {
   )[role ?? ""] ?? "Conta";
 }
 
+export function profileDisplayName(
+  principal: Principal,
+  participants: Membership[] | undefined,
+) {
+  const membership = participants?.find((participant) => participant.id === principal.membershipId);
+  return principal.name?.trim()
+    || membership?.user?.name?.trim()
+    || membership?.name?.trim()
+    || principal.email.split("@")[0];
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { principal, loading, logout } = useSession();
   const [open, setOpen] = useState(false);
@@ -71,9 +86,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const role = appRole(principal);
   const items = useMemo(() => navItems.filter((item) => role && item.roles.includes(role)), [role]);
   const allowed = role ? canAccessPath(role, pathname) : false;
+  const tenant = principal?.organizationId ?? "platform";
+  const participants = useQuery({
+    queryKey: queryKeys.tenant(tenant, "profile-participants"),
+    queryFn: () => memberService.participants(),
+    enabled: Boolean(principal?.membershipId && principal.organizationId),
+    staleTime: 5 * 60_000,
+  });
 
   if (loading) return <LoadingState label="Preparando seu espaço…" />;
   if (!principal || !role) return null;
+  const displayName = profileDisplayName(principal, participants.data);
 
   return (
     <div className={cn("app-shell", collapsed && "sidebar-collapsed")}>
@@ -127,9 +150,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span>{role === "SUPER_ADMIN" || role === "VALIDATOR" ? "Plataforma" : role === "LEADER_SETUP" ? "Primeiro acesso" : brand.name ?? "Equipe conectada"}</span>
           </div>
           <div className="profile-menu">
-            <span className="avatar">{initials(principal.email)}</span>
+            <span className="avatar">{initials(displayName)}</span>
             <div>
-              <strong>{principal.email.split("@")[0]}</strong>
+              <strong>{displayName}</strong>
               <span>{roleLabel(role)}</span>
             </div>
             <ChevronDown size={16} />

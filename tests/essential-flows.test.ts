@@ -23,6 +23,7 @@ import {
 import { validationSchema } from "@/features/validations/validation-schema";
 import { teamBrandVariables } from "@/components/team-brand-provider";
 import { calculateLogoDimensions } from "@/components/team-settings-fields";
+import { profileDisplayName } from "@/components/app-shell";
 import type { Activity } from "@/lib/types";
 
 afterEach(() => {
@@ -381,6 +382,20 @@ describe("fluxos essenciais", () => {
   it("redimensiona o logo preservando sua proporção", () => {
     expect(calculateLogoDimensions(1600, 800, 512)).toEqual({ width: 512, height: 256 });
     expect(calculateLogoDimensions(300, 200, 512)).toEqual({ width: 300, height: 200 });
+  });
+
+  it("exibe o nome do participante no perfil da barra superior", () => {
+    expect(profileDisplayName(
+      {
+        userId: "user-1",
+        email: "maria@example.com",
+        platformRole: "USER",
+        organizationId: "org-1",
+        membershipId: "member-1",
+        membershipRole: "MEMBER",
+      },
+      [{ id: "member-1", name: "Maria da Silva" }],
+    )).toBe("Maria da Silva");
   });
 
   it("exige pontos e justificativa na aprovação parcial", () => {

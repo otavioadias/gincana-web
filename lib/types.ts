@@ -30,6 +30,7 @@ export interface TokenPair {
 
 export interface Principal {
   userId: string;
+  name?: string;
   email: string;
   platformRole: PlatformRole;
   organizationId: string | null;
