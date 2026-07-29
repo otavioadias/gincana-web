@@ -23,6 +23,7 @@ import {
 } from "@/lib/services";
 import {
   appRole,
+  type Campaign,
   type MemberRankingEntry,
   type RankingEntry,
 } from "@/lib/types";
@@ -30,6 +31,15 @@ import { formatDate, formatNumber, initials } from "@/lib/utils";
 
 type RankingTab = "team" | "general";
 const podiumOrder = [1, 0, 2];
+
+export function resolveRankingCampaign(
+  campaigns: Campaign[] | undefined,
+  selectedCampaignId: string,
+  canSelectCampaign: boolean,
+) {
+  if (canSelectCampaign && selectedCampaignId) return selectedCampaignId;
+  return campaigns?.find((campaign) => campaign.status === "ACTIVE")?.id ?? "";
+}
 
 function rankingError(error: unknown) {
   if (error instanceof ApiError) {
@@ -217,7 +227,7 @@ export function RankingPage() {
   const { principal } = useSession();
   const role = appRole(principal);
   const isAdmin = role === "SUPER_ADMIN";
-  const [tab, setTab] = useState<RankingTab>("team");
+  const [tab, setTab] = useState<RankingTab>("general");
   const [campaignId, setCampaignId] = useState("");
   const [organizationId, setOrganizationId] = useState("");
   const campaigns = useQuery({
@@ -229,22 +239,30 @@ export function RankingPage() {
     queryFn: organizationService.list,
     enabled: isAdmin,
   });
+  const effectiveCampaignId = resolveRankingCampaign(
+    campaigns.data,
+    campaignId,
+    isAdmin,
+  );
   const members = useQuery({
     queryKey: queryKeys.tenant(
       isAdmin ? organizationId || null : principal?.organizationId ?? null,
       "member-ranking",
-      { campaignId },
+      { campaignId: effectiveCampaignId },
     ),
     queryFn: () => rankingService.members(
-      campaignId || undefined,
+      effectiveCampaignId,
       isAdmin ? organizationId : undefined,
     ),
-    enabled: tab === "team" && Boolean(principal) && (!isAdmin || Boolean(organizationId)),
+    enabled: tab === "team"
+      && Boolean(principal)
+      && Boolean(effectiveCampaignId)
+      && (!isAdmin || Boolean(organizationId)),
   });
   const general = useQuery({
-    queryKey: queryKeys.tenant(null, "ranking", campaignId),
-    queryFn: () => rankingService.list(campaignId || undefined),
-    enabled: tab === "general",
+    queryKey: queryKeys.tenant(null, "ranking", effectiveCampaignId),
+    queryFn: () => rankingService.list(effectiveCampaignId),
+    enabled: tab === "general" && Boolean(effectiveCampaignId),
   });
 
   if (campaigns.isLoading || (isAdmin && organizations.isLoading)) {
@@ -263,7 +281,9 @@ export function RankingPage() {
   const activeOrganizations = (organizations.data ?? []).filter(
     (organization) => organization.status === "ACTIVE",
   );
-  const selectedCampaign = campaigns.data?.find((campaign) => campaign.id === campaignId);
+  const selectedCampaign = campaigns.data?.find(
+    (campaign) => campaign.id === effectiveCampaignId,
+  );
   const generalEntries = general.data ?? [];
   const currentTeam = generalEntries.find(
     (entry) => entry.organizationId === principal?.organizationId,
@@ -275,17 +295,22 @@ export function RankingPage() {
         eyebrow="Impacto coletivo"
         title="Ranking da gincana"
         description="Acompanhe o desempenho individual da sua equipe e a classificação geral oficial."
-        action={(
+        action={isAdmin ? (
           <Select
-            value={campaignId}
+            value={effectiveCampaignId}
             onChange={(event) => setCampaignId(event.target.value)}
             aria-label="Filtrar ranking por campanha"
           >
-            <option value="">Todas as campanhas</option>
+            <option value="">Selecione uma campanha</option>
             {(campaigns.data ?? []).map((campaign) => (
               <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
             ))}
           </Select>
+        ) : (
+          <div className="ranking-current-campaign">
+            <span>Campanha atual</span>
+            <strong>{selectedCampaign?.name ?? "Nenhuma campanha ativa"}</strong>
+          </div>
         )}
       />
 
@@ -333,7 +358,14 @@ export function RankingPage() {
         )}
       </Card>
 
-      {tab === "team" ? (
+      {!effectiveCampaignId ? (
+        <EmptyState
+          title="Nenhuma campanha selecionada"
+          description={isAdmin
+            ? "Selecione uma campanha para carregar o ranking."
+            : "A plataforma ainda não possui uma campanha ativa."}
+        />
+      ) : tab === "team" ? (
         <>
           {isAdmin ? (
             <Card className="admin-ranking-team-picker">

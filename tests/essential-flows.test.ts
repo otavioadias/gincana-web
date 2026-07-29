@@ -27,6 +27,7 @@ import { validationSchema } from "@/features/validations/validation-schema";
 import { teamBrandVariables } from "@/components/team-brand-provider";
 import { calculateLogoDimensions } from "@/components/team-settings-fields";
 import { profileDisplayName } from "@/components/app-shell";
+import { resolveRankingCampaign } from "@/features/ranking/ranking-page";
 import { appRole, type Activity } from "@/lib/types";
 
 afterEach(() => {
@@ -123,6 +124,8 @@ describe("fluxos essenciais", () => {
     expect(canAccessPath("MEMBER", "/ranking")).toBe(true);
     expect(canAccessPath("MANAGER", "/ranking")).toBe(true);
     expect(canAccessPath("SUPER_ADMIN", "/ranking")).toBe(true);
+    expect(canAccessPath("MANAGER", "/campaigns")).toBe(false);
+    expect(canAccessPath("SUPER_ADMIN", "/campaigns")).toBe(true);
   });
 
   it("mapeia o papel ADMIN do backend para a área administrativa", () => {
@@ -463,6 +466,17 @@ describe("fluxos essenciais", () => {
     const adminHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Headers;
     expect(memberHeaders.get("Authorization")).toBe("Bearer token");
     expect(adminHeaders.get("Authorization")).toBe("Bearer token");
+  });
+
+  it("usa a campanha ativa por padrão e permite troca somente ao admin", () => {
+    const campaigns = [
+      { id: "draft", status: "DRAFT" as const },
+      { id: "active", status: "ACTIVE" as const },
+      { id: "closed", status: "CLOSED" as const },
+    ];
+    expect(resolveRankingCampaign(campaigns, "", false)).toBe("active");
+    expect(resolveRankingCampaign(campaigns, "closed", false)).toBe("active");
+    expect(resolveRankingCampaign(campaigns, "closed", true)).toBe("closed");
   });
 
   it("gera variáveis globais de marca com variações derivadas", () => {

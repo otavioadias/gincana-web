@@ -49,7 +49,7 @@ const navItems: NavItem[] = [
   { href: "/submissions", label: "Ações da equipe", icon: Send, roles: ["MEMBER", "MANAGER"] },
   { href: "/validations", label: "Validações", icon: ClipboardCheck, roles: ["SUPER_ADMIN"] },
   { href: "/members", label: "Equipe", icon: Users, roles: ["MANAGER"] },
-  { href: "/campaigns", label: "Campanhas", icon: Flag, roles: ["MANAGER", "SUPER_ADMIN"] },
+  { href: "/campaigns", label: "Campanhas", icon: Flag, roles: ["SUPER_ADMIN"] },
   { href: "/goals", label: "Metas", icon: Target, roles: ["MANAGER", "SUPER_ADMIN"] },
   { href: "/settings", label: "Identidade", icon: Settings, roles: ["MANAGER", "MEMBER"] },
   { href: "/admin/dashboard", label: "Painel das equipes", icon: LayoutDashboard, roles: ["SUPER_ADMIN"] },
