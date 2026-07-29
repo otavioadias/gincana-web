@@ -20,9 +20,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <TeamBrandProvider>{children}</TeamBrandProvider>
+        <TeamBrandProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+        </TeamBrandProvider>
       </SessionProvider>
-      <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );
 }

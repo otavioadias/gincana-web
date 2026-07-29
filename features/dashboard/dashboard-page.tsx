@@ -200,8 +200,8 @@ export function DashboardPage() {
                   <XAxis type="number" tickLine={false} axisLine={false} fontSize={11} />
                   <YAxis type="category" dataKey="activityName" width={120} tickLine={false} axisLine={false} fontSize={11} />
                   <Tooltip />
-                  <Bar name="Aprovado" dataKey="approvedPoints" stackId="progress" fill="#16805f" barSize={18} />
-                  <Bar name="Pendente" dataKey="pendingPoints" stackId="progress" fill="#e4a52e" radius={[0, 8, 8, 0]} barSize={18} />
+                  <Bar name="Aprovado" dataKey="approvedPoints" stackId="progress" fill="var(--team-primary)" barSize={18} />
+                  <Bar name="Pendente" dataKey="pendingPoints" stackId="progress" fill="var(--team-secondary)" radius={[0, 8, 8, 0]} barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -109,7 +109,7 @@ export function SettingsPage() {
             currentLogo={profile.logoUrl}
             disabled={!canEdit}
             loading={logo.isPending}
-            onChange={(file) => logo.mutate(file)}
+            onSave={(file) => logo.mutateAsync(file).then(() => undefined)}
           />
           {canEdit && profile.hasLogo ? (
             <Button variant="danger" onClick={() => setConfirmRemove(true)}>

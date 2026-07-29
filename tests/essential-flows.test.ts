@@ -22,6 +22,7 @@ import {
 } from "@/features/submissions/validation";
 import { validationSchema } from "@/features/validations/validation-schema";
 import { teamBrandVariables } from "@/components/team-brand-provider";
+import { calculateLogoDimensions } from "@/components/team-settings-fields";
 import type { Activity } from "@/lib/types";
 
 afterEach(() => {
@@ -373,6 +374,13 @@ describe("fluxos essenciais", () => {
     expect(variables["--team-primary"]).toBe("#123456");
     expect(variables["--primary"]).toBe("#123456");
     expect(variables["--team-primary-hover"]).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(variables["--team-primary-dark"]).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(["#17241F", "#FFFFFF"]).toContain(variables["--team-on-primary"]);
+  });
+
+  it("redimensiona o logo preservando sua proporção", () => {
+    expect(calculateLogoDimensions(1600, 800, 512)).toEqual({ width: 512, height: 256 });
+    expect(calculateLogoDimensions(300, 200, 512)).toEqual({ width: 300, height: 200 });
   });
 
   it("exige pontos e justificativa na aprovação parcial", () => {
