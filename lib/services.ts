@@ -9,6 +9,7 @@ import type {
   Goal,
   GoalProgress,
   Membership,
+  TeamMemberRanking,
   Organization,
   Principal,
   RankingEntry,
@@ -137,6 +138,10 @@ export const dashboardService = {
 export const rankingService = {
   list: (campaignId?: string) =>
     apiRequest<RankingEntry[]>(`/ranking${query({ campaignId })}`),
+  members: (campaignId?: string, organizationId?: string) =>
+    apiRequest<TeamMemberRanking>(
+      `/ranking/members${query({ campaignId, organizationId })}`,
+    ),
 };
 
 export const campaignService = {

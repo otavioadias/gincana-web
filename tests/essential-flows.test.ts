@@ -427,6 +427,44 @@ describe("fluxos essenciais", () => {
     expect(headers.get("Authorization")).toBe("Bearer token");
   });
 
+  it("restringe a consulta de integrantes conforme o perfil", async () => {
+    tokenStorage.write({ accessToken: "token", refreshToken: "refresh-token-with-more-than-32-chars", expiresIn: "15m" });
+    const response = {
+      team: { id: "team-1", name: "Equipe Azul", slug: "equipe-azul" },
+      ranking: [{
+        position: 1,
+        membershipId: "member-1",
+        userId: "user-1",
+        name: "Ana Silva",
+        points: 1250,
+        approvedActions: 4,
+        lastUpdatedAt: "2026-07-29T12:00:00.000Z",
+      }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(response), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(response), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await rankingService.members("campaign-1");
+    await rankingService.members(undefined, "team-1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:3000/ranking/members?campaignId=campaign-1",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:3000/ranking/members?organizationId=team-1",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    const memberHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    const adminHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Headers;
+    expect(memberHeaders.get("Authorization")).toBe("Bearer token");
+    expect(adminHeaders.get("Authorization")).toBe("Bearer token");
+  });
+
   it("gera variáveis globais de marca com variações derivadas", () => {
     const variables = teamBrandVariables({
       primaryColor: "#123456",

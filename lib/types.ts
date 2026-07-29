@@ -101,6 +101,21 @@ export interface RankingEntry {
   lastUpdatedAt: string | null;
 }
 
+export interface MemberRankingEntry {
+  position: number;
+  membershipId: string;
+  userId: string;
+  name: string;
+  points: number;
+  approvedActions: number;
+  lastUpdatedAt: string | null;
+}
+
+export interface TeamMemberRanking {
+  team: AdminTeamReference;
+  ranking: MemberRankingEntry[];
+}
+
 export interface ActivityItemType {
   id?: string;
   name?: string;
